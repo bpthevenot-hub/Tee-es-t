@@ -6,10 +6,15 @@ on:
     paths:
       - "commercial-agent/**"
       - ".github/workflows/commercial-agent-ci.yml"
+      - ".github/workflows/robot.yml"
   pull_request:
     paths:
       - "commercial-agent/**"
       - ".github/workflows/commercial-agent-ci.yml"
+      - ".github/workflows/robot.yml"
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -34,3 +39,6 @@ jobs:
 
       - name: Test
         run: pytest tests/ -q
+
+      - name: Validate publisher shell syntax
+        run: bash -n publish_status.sh

@@ -52,7 +52,7 @@ def run_autonomous(routine: str) -> str:
     return result
 
 
-def main():
+def main() -> int:
     """Entry point — determines which routine to run based on args or time."""
     import sys
 
@@ -85,7 +85,13 @@ def main():
         f.write(result)
 
     log.info(f"Report saved: {report_file}")
+    # The shared loop returns failures as text. Propagate them to cron/CI
+    # instead of publishing a successful status after an API failure.
+    if result.startswith(("API Error", "Error:", "Agent stopped:")):
+        log.error("Routine failed; report saved for diagnosis.")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
