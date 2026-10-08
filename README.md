@@ -28,6 +28,23 @@ Les outils (`commercial-agent/tools/`) exposent HubSpot, Gmail, Notion, GitHub
 et un générateur de livrables au modèle Claude via le pattern tool-use.
 Les résultats sont publiés sur `docs/status.json` et commités à chaque run.
 
+#### Secrets GitHub Actions
+
+Pour activer le robot, ajouter les secrets dans **Settings → Secrets and variables
+→ Actions → New repository secret** du dépôt qui exécute le workflow
+([ouvrir les secrets Actions](https://github.com/bpthevenot-hub/Tee-es-t/settings/secrets/actions)).
+Les deux secrets obligatoires vérifiés par le workflow sont :
+
+- `ANTHROPIC_API_KEY`
+- `HUBSPOT_API_KEY`
+
+Pour activer également les intégrations Gmail et Notion, ajouter
+`GMAIL_CREDENTIALS_JSON` et `NOTION_API_KEY`. `GITHUB_TOKEN` est fourni
+automatiquement par GitHub Actions. Ne jamais mettre les valeurs des clés dans
+le dépôt, un fichier versionné ou un commit. Après leur ajout, lancer le
+workflow depuis l'onglet **Actions** avec `configuration_only` coché pour
+vérifier leur présence.
+
 ### Page de statut (`docs/`)
 Déployée via Netlify (`netlify.toml`) — lecture seule, mise à jour par le robot
 à chaque exécution.
