@@ -15,6 +15,11 @@ on:
           - morning
           - followup
           - weekly_audit
+      configuration_only:
+        description: 'Verifier uniquement la presence des secrets requis'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: robot-commercial-${{ github.repository }}
@@ -48,22 +53,45 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
         run: |
+          missing=()
           for key in ANTHROPIC_API_KEY HUBSPOT_API_KEY; do
-            if [ -z "${!key}" ]; then
-              echo "::error::Secret requis manquant : $key. Configurer les secrets de ce depot."
-              exit 1
+            value="${!key:-}"
+            if [[ -z "${value//[[:space:]]/}" ]]; then
+              missing+=("$key")
+              echo "::error::Secret requis manquant ou vide : $key."
             fi
           done
+          secrets_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/settings/secrets/actions"
+          if (( ${#missing[@]} > 0 )); then
+            {
+              printf '## Robot bloque : configuration incomplete\n\n'
+              printf 'Secrets requis non disponibles pour ce workflow :\n\n'
+              printf -- '- `%s`\n' "${missing[@]}"
+              printf '\n[Configurer les secrets Actions de ce depot](%s).\n\n' "$secrets_url"
+              printf 'Ajouter les cles sous ces noms exacts dans le depot qui execute le workflow.\n'
+              printf 'Si elles sont stockees dans un environnement GitHub, le job doit utiliser cet environnement.\n\n'
+              printf 'Puis lancer ce workflow depuis la branche par defaut avec `configuration_only` coche.\n'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Configurer les secrets Actions : $secrets_url"
+            exit 1
+          fi
+          {
+            printf '## Configuration presente\n\n'
+            printf 'Les deux secrets requis sont disponibles. Ce controle verifie leur presence, pas leur validite API.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Setup Python
+        if: inputs.configuration_only != true
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       - name: Install dependencies
+        if: inputs.configuration_only != true
         run: pip install -r requirements.txt
 
       - name: Determine routine
+        if: inputs.configuration_only != true
         id: routine
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -89,6 +117,7 @@ jobs:
           printf 'name=%s\n' "$routine" >> "$GITHUB_OUTPUT"
 
       - name: Run robot routine
+        if: inputs.configuration_only != true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
@@ -103,6 +132,7 @@ jobs:
         run: python autonomous.py "$ROUTINE"
 
       - name: Update website status
+        if: inputs.configuration_only != true
         env:
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
           ROUTINE: ${{ steps.routine.outputs.name }}
@@ -110,6 +140,7 @@ jobs:
         run: python update_status.py "$ROUTINE"
 
       - name: Commit and push status update
+        if: inputs.configuration_only != true
         working-directory: .
         env:
           ROUTINE: ${{ steps.routine.outputs.name }}
