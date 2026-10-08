@@ -9,7 +9,8 @@
     "dev:server": "node server/index.js",
     "build": "vite build",
     "start": "npm run build && node server/index.js",
-    "server": "node server/index.js"
+    "server": "node server/index.js",
+    "test:security": "node --test server/security.test.js"
   },
   "dependencies": {
     "@netlify/blobs": "^8.1.0",

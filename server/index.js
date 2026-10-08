@@ -9,6 +9,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { pushQuizLeadToHubSpot } = require("./hubspot");
+const { isValidSessionId, escapeCsvField } = require("./security");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -33,7 +34,6 @@ if (!API_KEY) {
     fs.appendFileSync(ENV_PATH, envLine);
     console.log("──────────────────────────────────────────────");
     console.log("  NEW API KEY GENERATED AND SAVED TO .env");
-    console.log(`  ${API_KEY}`);
     console.log("──────────────────────────────────────────────");
   }
 }
@@ -76,6 +76,9 @@ app.post("/api/quiz/submit", (req, res) => {
 
   if (!data || !data.session_id) {
     return res.status(400).json({ error: "Missing session_id" });
+  }
+  if (!isValidSessionId(data.session_id)) {
+    return res.status(400).json({ error: "Invalid session_id" });
   }
 
   // Save to individual JSON file
@@ -141,6 +144,9 @@ app.get("/api/admin/submissions", requireApiKey, (req, res) => {
 
 // Get single submission
 app.get("/api/admin/submissions/:sessionId", requireApiKey, (req, res) => {
+  if (!isValidSessionId(req.params.sessionId)) {
+    return res.status(400).json({ error: "Invalid session ID" });
+  }
   const filepath = path.join(DATA_DIR, `${req.params.sessionId}.json`);
   if (!fs.existsSync(filepath)) {
     return res.status(404).json({ error: "Session not found" });
@@ -237,7 +243,7 @@ app.get("/api/admin/export/csv", requireApiKey, (req, res) => {
         answerMap.sauce_usage, answerMap.budget, answerMap.valeurs, answerMap.lieu_achat,
         d.profile?.scores?.epicurien || 0, d.profile?.scores?.artisan || 0,
         d.profile?.scores?.pragmatique || 0, d.profile?.scores?.curieux || 0, d.profile?.scores?.social || 0,
-      ].map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",");
+      ].map(escapeCsvField).join(",");
     } catch {
       return null;
     }
@@ -252,6 +258,9 @@ app.get("/api/admin/export/csv", requireApiKey, (req, res) => {
 
 // Delete a submission
 app.delete("/api/admin/submissions/:sessionId", requireApiKey, (req, res) => {
+  if (!isValidSessionId(req.params.sessionId)) {
+    return res.status(400).json({ error: "Invalid session ID" });
+  }
   const filepath = path.join(DATA_DIR, `${req.params.sessionId}.json`);
   if (!fs.existsSync(filepath)) {
     return res.status(404).json({ error: "Session not found" });
@@ -273,7 +282,7 @@ if (fs.existsSync(DIST_DIR)) {
 }
 
 // ─── START ───
-app.listen(PORT, () => {
+if (require.main === module) app.listen(PORT, () => {
   const isProduction = fs.existsSync(DIST_DIR);
   console.log("");
   console.log("  ╔══════════════════════════════════════════╗");
@@ -282,7 +291,7 @@ app.listen(PORT, () => {
   console.log("");
   console.log(`  Mode:     ${isProduction ? "PRODUCTION (serving frontend)" : "DEVELOPMENT (API only)"}`);
   console.log(`  URL:      http://localhost:${PORT}`);
-  console.log(`  API Key:  ${API_KEY}`);
+  console.log("  API Key:  configured (value hidden)");
   console.log("");
   console.log("  Public:");
   console.log("    POST /api/quiz/submit");
@@ -295,3 +304,5 @@ app.listen(PORT, () => {
   console.log("    DEL  /api/admin/submissions/:id");
   console.log("");
 });
+
+module.exports = { app };

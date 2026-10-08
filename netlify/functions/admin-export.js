@@ -4,6 +4,9 @@
 // ─────────────────────────────────────────────────────────
 
 import { getStore } from "@netlify/blobs";
+import security from "../../server/security.js";
+
+const { escapeCsvField } = security;
 
 function checkAuth(req) {
   const key =
@@ -52,7 +55,7 @@ export default async (req) => {
           d.profile?.scores?.epicurien || 0, d.profile?.scores?.artisan || 0,
           d.profile?.scores?.pragmatique || 0, d.profile?.scores?.curieux || 0, d.profile?.scores?.social || 0,
         ]
-          .map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`)
+          .map(escapeCsvField)
           .join(",")
       );
     }
