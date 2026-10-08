@@ -2,10 +2,22 @@
 
 ## REPOSITORY CONTEXT
 
-### Dépôts Git
+### Dépôts Git (état vérifié le 8 octobre 2026)
 
-- **Dépôt actif :** `https://github.com/lfdsss/Tee-es-t` — remote attendu : `origin`
-- **Dépôt à ignorer :** `https://github.com/bpthevenot-hub/teest` — ne jamais y pousser ni l'utiliser
+- **Ce dépôt :** `https://github.com/bpthevenot-hub/Tee-es-t` — fork public
+  maintenu sous le compte `bpthevenot-hub`. Le propriétaire a confirmé ce dépôt
+  comme cible de travail. Vérifier que `origin` pointe ici avant chaque push.
+- **Dépôt SNB distinct :** `https://github.com/snb-cons/Tee-es-t` — dépôt privé
+  avec son propre `main` et ses PR. Ses consignes se trouvent dans son propre
+  `CLAUDE.md`. Ne pas synchroniser ses branches ou ses secrets par simple
+  ressemblance des fichiers ; contribuer séparément dans ce dépôt.
+- **Original historique :** `https://github.com/lfdsss/Tee-es-t` — archivé ;
+  son `main` est un ancêtre de celui du présent fork, pas une cible de PR active.
+- **Autre dépôt à ignorer :** `https://github.com/bpthevenot-hub/teest`
+  (sans tirets) — dépôt distinct et archivé. Ne pas le confondre avec le fork
+  `Tee-es-t` ci-dessus.
+- Voir `BRANCHES.md` et relancer `python3 scripts/audit_branch_topology.py`
+  pour établir les SHA et écarts des forks publics avant toute reprise.
 
 ### Règles de contribution
 
