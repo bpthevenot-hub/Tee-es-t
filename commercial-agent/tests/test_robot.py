@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 PUBLISHER = Path(__file__).resolve().parents[1] / "publish_status.sh"
+CONFIG_CHECK = Path(__file__).resolve().parents[1] / "check_config.sh"
 
 
 def git(repo: Path, *args: str) -> str:
@@ -144,6 +145,75 @@ def test_publish_permission_denial_fails_without_force_push(git_repos, tmp_path)
     assert result.returncode == 1
     assert "apres 4 tentatives" in result.stdout
     assert git(remote, "rev-parse", "main") == remote_head
+
+
+def check_config(tmp_path: Path, **env: str) -> tuple[subprocess.CompletedProcess[str], str, str]:
+    output = tmp_path / "github_output"
+    summary = tmp_path / "github_summary"
+    result = subprocess.run(
+        ["bash", str(CONFIG_CHECK)],
+        cwd=tmp_path,
+        env={
+            "PATH": os.environ["PATH"],
+            "GITHUB_OUTPUT": str(output),
+            "GITHUB_STEP_SUMMARY": str(summary),
+            "GITHUB_SERVER_URL": "https://github.com",
+            "GITHUB_REPOSITORY": "owner/repo",
+            **env,
+        },
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    return (
+        result,
+        output.read_text() if output.exists() else "",
+        summary.read_text() if summary.exists() else "",
+    )
+
+
+def test_config_check_reports_ready_when_secrets_present(tmp_path):
+    result, output, summary = check_config(
+        tmp_path, ANTHROPIC_API_KEY="test-anthropic-value", HUBSPOT_API_KEY="test-hubspot-value"
+    )
+    assert result.returncode == 0, result.stderr
+    assert "config_ready=true" in output
+    assert "Configuration presente" in summary
+    assert "::warning::" not in result.stdout
+    # Secret values must never leak into logs, outputs or summaries.
+    assert "test-anthropic-value" not in result.stdout + result.stderr + output + summary
+    assert "test-hubspot-value" not in result.stdout + result.stderr + output + summary
+
+
+def test_config_check_skips_gracefully_when_all_secrets_missing(tmp_path):
+    result, output, summary = check_config(tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert "config_ready=false" in output
+    assert "Robot suspendu" in summary
+    assert "ANTHROPIC_API_KEY" in summary
+    assert "HUBSPOT_API_KEY" in summary
+    assert result.stdout.count("::warning::") == 2
+    assert "::error::" not in result.stdout
+
+
+def test_config_check_lists_only_the_missing_secret(tmp_path):
+    result, output, summary = check_config(tmp_path, HUBSPOT_API_KEY="test-hubspot-value")
+    assert result.returncode == 0, result.stderr
+    assert "config_ready=false" in output
+    assert result.stdout.count("::warning::") == 1
+    assert "ANTHROPIC_API_KEY" in summary
+    assert "- `HUBSPOT_API_KEY`" not in summary
+    assert "test-hubspot-value" not in result.stdout + result.stderr + output + summary
+
+
+def test_config_check_treats_blank_secret_as_missing(tmp_path):
+    result, output, _ = check_config(
+        tmp_path, ANTHROPIC_API_KEY="   ", HUBSPOT_API_KEY="test-hubspot-value"
+    )
+    assert result.returncode == 0, result.stderr
+    assert "config_ready=false" in output
+    assert result.stdout.count("::warning::") == 1
+    assert "ANTHROPIC_API_KEY" in result.stdout
 
 
 @pytest.mark.parametrize(

@@ -42,3 +42,6 @@ jobs:
 
       - name: Validate publisher shell syntax
         run: bash -n publish_status.sh
+
+      - name: Validate configuration check shell syntax
+        run: bash -n check_config.sh
