@@ -70,9 +70,13 @@
     var portail = document.getElementById('portail')
     document.body.style.overflow = 'hidden'
     function entrer() {
+      // Sans ce retrait, Tab reste piégé vers les boutons masqués du portail.
+      window.removeEventListener('keydown', surTouche)
       portail.classList.add('ferme')
       portail.setAttribute('aria-hidden', 'true')
       document.body.style.overflow = ''
+      var contenu = document.getElementById('contenu')
+      if (contenu) { contenu.setAttribute('tabindex', '-1'); contenu.focus({ preventScroll: true }) }
       setTimeout(function () { portail.style.display = 'none' }, 500)
     }
     portail.querySelectorAll('[data-entrer]').forEach(function (b) { b.addEventListener('click', entrer) })
