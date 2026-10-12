@@ -141,8 +141,11 @@ strong { font-weight: 650; }
 }
 #contenu:focus-visible { outline: none; box-shadow: none; }
 
-.mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.num, .donnee, .barre-val, .chiffres .num { letter-spacing: -0.035em; word-spacing: -0.2em; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+/* Chiffres dans la prose : sans-serif à chasse tabulaire (même hauteur d'x que le texte).
+   Le mono reste réservé aux figures, aux tableaux et au numéro. */
+.num, .donnee { font-family: var(--sans); font-variant-numeric: lining-nums tabular-nums; letter-spacing: 0; word-spacing: normal; }
+.barre-val { letter-spacing: -0.035em; word-spacing: -0.2em; }
 a.n3114 { color: var(--rouge); }
 .nowrap { white-space: nowrap; }
 .label {
@@ -232,7 +235,7 @@ a.ref:focus-visible { outline-width: 2px; outline-offset: 1px; border-radius: 2p
 .portail-page {
   max-width: 54rem;
   margin: 0 auto;
-  padding: clamp(1rem, 2vw, 2rem) var(--gouttiere) 2.5rem;
+  padding: clamp(1rem, 2vw, 2rem) var(--gouttiere) 1.5rem;
 }
 .portail-haut { display: flex; justify-content: flex-end; margin-bottom: 0.5rem; }
 .lien-passer {
@@ -263,16 +266,35 @@ a.ref:focus-visible { outline-width: 2px; outline-offset: 1px; border-radius: 2p
 @media (min-width: 40rem) {
   .abstract-ligne { grid-template-columns: 8rem 1fr; gap: 1.5rem; }
 }
+.abstract .num { font-weight: 650; }
 .abstract .rouge { color: var(--rouge); font-weight: 650; }
 .appel-bloc { display: grid; gap: 0.7rem; }
 .appel-num {
   font-family: var(--mono); font-variant-numeric: tabular-nums;
-  font-size: clamp(1.75rem, 1.2rem + 2.4vw, 2.5rem);
+  font-size: clamp(1.5rem, 1.15rem + 1.6vw, 2.125rem);
   font-weight: 600; letter-spacing: 0.02em; line-height: 1.1;
   color: var(--bleu); text-decoration: none; white-space: nowrap;
 }
 .appel-num:hover { text-decoration: underline; text-decoration-thickness: 2px; }
-.portail-actions { padding-top: 1.1rem; display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center; }
+/* Barre d'actions collée en bas du portail : numéro + entrée toujours visibles */
+.portail-actions {
+  position: sticky; bottom: 0; z-index: 1;
+  background: var(--fond);
+  border-top: 1px solid var(--filet-fort);
+  box-shadow: 0 -0.75rem 1.25rem -0.75rem rgba(18, 25, 35, 0.18);
+}
+.portail-actions-int {
+  max-width: 54rem; margin: 0 auto;
+  padding: 0.7rem var(--gouttiere) calc(0.8rem + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-wrap: wrap; gap: 0.6rem 1.5rem; align-items: center; justify-content: space-between;
+}
+.portail-ligne { display: grid; gap: 0.15rem; }
+.portail-ligne .label { letter-spacing: 0.08em; }
+.portail-actions .bouton { flex: none; }
+@media (max-width: 29.99rem) {
+  .portail-actions-int { padding-top: 0.55rem; gap: 0.5rem; }
+  .portail-actions .bouton { flex: 1 1 100%; justify-content: center; }
+}
 
 /* =========================================================
    En-tête du site
@@ -344,6 +366,12 @@ a.ref:focus-visible { outline-width: 2px; outline-offset: 1px; border-radius: 2p
 }
 .encart h2, .encart h3 { font-size: var(--t-h4); margin: 0.45rem 0 0.5rem; }
 .encart p { font-size: 0.9875rem; color: var(--encre-2); }
+.encart-meta { margin: 1rem 0 0; border-top: 1px solid var(--filet); font-size: var(--t-petit); }
+.encart-meta > div { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 0.75rem; padding: 0.55rem 0; border-bottom: 1px solid var(--filet); align-items: baseline; }
+.encart-meta > div:last-child { border-bottom: 0; padding-bottom: 0; }
+.encart-meta dt { font-size: var(--t-label); font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--encre-3); }
+.encart-meta dd { margin: 0; color: var(--encre-2); }
+.encart-meta a { font-weight: 600; white-space: nowrap; }
 
 /* Chiffres associatifs */
 .chiffres {
@@ -358,12 +386,16 @@ a.ref:focus-visible { outline-width: 2px; outline-offset: 1px; border-radius: 2p
   .chiffres li:nth-child(n+3) { border-top: 1px solid var(--filet); }
 }
 .chiffres .num {
-  font-family: var(--serif); font-variant-numeric: lining-nums tabular-nums;
-  font-size: clamp(1.625rem, 1.2rem + 1.5vw, 2.25rem); font-weight: 600;
-  letter-spacing: 0; word-spacing: normal;
-  color: var(--encre); line-height: 1.1;
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: clamp(1.5rem, 1.15rem + 1.3vw, 2rem); font-weight: 600;
+  letter-spacing: -0.02em; word-spacing: -0.15em;
+  color: var(--encre); line-height: 1.1; white-space: nowrap;
 }
-.chiffres .lib { font-size: var(--t-petit); color: var(--encre-2); }
+.chiffres .lib { font-size: var(--t-petit); color: var(--encre-2); margin-top: 0.15rem; }
+.chiffres .meta {
+  font-family: var(--mono); font-size: var(--t-label); color: var(--encre-3);
+  border-top: 1px solid var(--filet); padding-top: 0.35rem; margin-top: 0.3rem;
+}
 
 /* Figures */
 .fig { margin: 0; border-top: 1px solid var(--filet-fort); padding-top: 0.9rem; }
@@ -507,6 +539,32 @@ a.ref:focus-visible { outline-width: 2px; outline-offset: 1px; border-radius: 2p
 .article-section > p { color: var(--encre); }
 .article-section .fig { margin-top: 0.75rem; }
 
+/* Encadré de méthode (section 3) */
+.fiche { border-top: 3px solid var(--filet-fort); border-bottom: 1px solid var(--filet); max-width: 48rem; padding-top: 0.8rem; }
+.fiche-titre { font-size: 0.9375rem; color: var(--encre); margin-bottom: 0.5rem; }
+.fiche dl { margin: 0; }
+.fiche dl > div { display: grid; grid-template-columns: 1fr; gap: 0.1rem; padding: 0.55rem 0; border-top: 1px solid var(--filet); }
+@media (min-width: 40rem) { .fiche dl > div { grid-template-columns: 8rem minmax(0, 1fr); gap: 1.25rem; align-items: baseline; } }
+.fiche dt { font-size: var(--t-label); font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--encre-3); }
+.fiche dd { margin: 0; font-size: 0.9375rem; color: var(--encre-2); }
+.fiche .fiche-resultat { color: var(--bleu); font-weight: 650; }
+
+/* Schéma du parcours (figure 3) */
+.schema { list-style: none; display: grid; gap: 0; border-left: 2px solid var(--bleu); margin-left: 0.3rem; }
+.schema li { position: relative; display: grid; gap: 0.2rem; align-content: start; padding: 0 0 1.1rem 1.25rem; }
+.schema li::before { content: ""; position: absolute; left: calc(-0.3rem - 1px); top: 0.3rem; width: 0.6rem; height: 0.6rem; background: var(--bleu); }
+.schema li:last-child { padding-bottom: 0; }
+.schema strong { font-family: var(--serif); font-size: var(--t-h4); font-weight: 700; color: var(--encre); }
+.schema li > span:last-child:not(.etape-num) { font-size: 0.9375rem; color: var(--encre-2); }
+.schema .schema-fin::before { background: var(--fond); border: 2px solid var(--bleu); }
+@media (min-width: 52rem) {
+  .schema { grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 0.8fr); border-left: 0; margin-left: 0; border-top: 2px solid var(--bleu); }
+  .schema li { padding: 1rem 1.5rem 0 0; }
+  .schema li::before { left: 0; top: calc(-0.3rem - 1px); }
+  .schema li + li::after { content: "→"; position: absolute; left: -1.35rem; top: 0.95rem; font-family: var(--mono); color: var(--bleu); }
+  .schema li + li { padding-left: 0; }
+}
+
 .tableau-defile { overflow-x: auto; -webkit-overflow-scrolling: touch; border-top: 1px solid var(--filet-fort); border-bottom: 1px solid var(--filet-fort); }
 .tableau-defile:focus-visible { outline-offset: 4px; }
 table { border-collapse: collapse; width: 100%; min-width: 46rem; font-size: 0.9375rem; }
@@ -515,7 +573,8 @@ th, td { text-align: left; vertical-align: top; padding: 0.7rem 1rem 0.7rem 0; b
 thead th { font-size: var(--t-label); text-transform: uppercase; letter-spacing: 0.08em; color: var(--encre-3); font-weight: 650; border-bottom: 1px solid var(--filet-fort); }
 tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
 td.mono, th.mono { white-space: nowrap; }
-.donnee { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.donnee { font-weight: 650; white-space: nowrap; }
+td .donnee, .fig .donnee { font-family: var(--mono); font-size: 0.94em; font-weight: 600; }
 .donnee--alerte { color: var(--rouge); }
 
 .messages {
@@ -604,7 +663,7 @@ td.mono, th.mono { white-space: nowrap; }
     <header class="portail-entete">
       <p class="label">Écoute dédiée aux soignants — 7&nbsp;j/7</p>
       <h1 id="portail-titre">Qui prend soin de ceux qui soignent&nbsp;?</h1>
-      <p class="chapeau" id="portail-chapeau">Chaque jour, ils soignent des millions de Français. Les données publiées décrivent ce que cela leur coûte — et montrent qu’un accompagnement change la trajectoire.</p>
+      <p class="chapeau" id="portail-chapeau">Chaque jour, ils soignent des millions de Français. Les données publiées décrivent ce que cela leur coûte — et montrent que l’accompagnement réduit le burnout de façon cliniquement significative<a class="ref" href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" title="West, Dyrbye, Erwin &amp; Shanafelt, The Lancet, 2016 — revue systématique et méta-analyse" target="_blank" rel="noopener">[4]</a>.</p>
     </header>
     <dl class="abstract">
       <div class="abstract-ligne">
@@ -613,7 +672,7 @@ td.mono, th.mono { white-space: nowrap; }
       </div>
       <div class="abstract-ligne">
         <dt class="label">Constat</dt>
-        <dd><span class="num">49&nbsp;%</span> des médecins français sont touchés par le burnout au cours de leur carrière<a class="ref" href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" title="Kansoun et al., Journal of Affective Disorders, 2019 — méta-analyse de 37 études, 15 183 médecins" target="_blank" rel="noopener">[1]</a>. Chez les médecins, le risque de décès par suicide est supérieur de <span class="num rouge">44&nbsp;%</span> à celui de la population générale<a class="ref" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" title="Dutheil et al., PLOS ONE, 2019 — méta-analyse de 25 études" target="_blank" rel="noopener">[2]</a>. Chez les jeunes médecins, <span class="num">66,2&nbsp;%</span> présentent des symptômes anxieux<a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a>.</dd>
+        <dd><span class="num">49&#8239;%</span> des médecins français sont touchés par le burnout au cours de leur carrière<a class="ref" href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" title="Kansoun et al., Journal of Affective Disorders, 2019 — méta-analyse de 37 études, 15 183 médecins" target="_blank" rel="noopener">[1]</a>. Chez les médecins, le risque de décès par suicide est supérieur de <span class="num rouge">44&#8239;%</span> à celui de la population générale<a class="ref" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" title="Dutheil et al., PLOS ONE, 2019 — méta-analyse de 25 études" target="_blank" rel="noopener">[2]</a>. Chez les jeunes médecins, <span class="num">66,2&#8239;%</span> présentent des symptômes anxieux<a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a>.</dd>
       </div>
       <div class="abstract-ligne">
         <dt class="label">Intervention</dt>
@@ -623,14 +682,16 @@ td.mono, th.mono { white-space: nowrap; }
         <dt class="label">Appel</dt>
         <dd class="appel-bloc">
           <p>Si vous traversez une période difficile, ou si un confrère vous inquiète&nbsp;: un appel suffit.</p>
-          <a class="appel-num" href="tel:+33608282589">06 08 28 25 89</a>
           <div class="sortie sortie--compacte">
             <p>Ligne MOTS&nbsp;: 7&nbsp;j/7, confidentielle. En cas d’idées suicidaires, pour vous ou pour un proche, le <a class="mono n3114" href="tel:3114"><strong>3114</strong></a> répond gratuitement, 24&nbsp;h/24.</p>
           </div>
         </dd>
       </div>
     </dl>
-    <div class="portail-actions">
+  </div>
+  <div class="portail-actions">
+    <div class="portail-actions-int">
+      <p class="portail-ligne"><span class="label">Ligne d’écoute MOTS — 7&nbsp;j/7</span><a class="appel-num" href="tel:+33608282589">06 08 28 25 89</a></p>
       <button type="button" class="bouton" id="portail-entrer" data-entrer>Entrer dans le site</button>
     </div>
   </div>
@@ -685,6 +746,10 @@ td.mono, th.mono { white-space: nowrap; }
         <p class="label">En une phrase</p>
         <h2 id="t-encart">Un pair qui comprend votre quotidien, à un appel de vous.</h2>
         <p>Épuisement, surinvestissement, problème de santé, addiction, difficultés administratives, financières ou juridiques&nbsp;: quelle que soit la porte d’entrée, l’accompagnement est gratuit et confidentiel.</p>
+        <dl class="encart-meta">
+          <div><dt>Ligne MOTS</dt><dd><a class="mono" href="tel:+33608282589">06 08 28 25 89</a> · 7&nbsp;j/7</dd></div>
+          <div><dt>Idées suicidaires</dt><dd><a class="mono n3114" href="tel:3114">3114</a> · 24&nbsp;h/24, gratuit</dd></div>
+        </dl>
       </aside>
     </div>
   </div>
@@ -692,10 +757,10 @@ td.mono, th.mono { white-space: nowrap; }
   <div class="conteneur">
     <h2 class="visuellement-cache">L’association en chiffres</h2>
     <ul class="chiffres">
-      <li><span class="num">2010</span><span class="lib">Création à Toulouse</span></li>
-      <li><span class="num">1&nbsp;700+</span><span class="lib">Soignants accompagnés</span></li>
-      <li><span class="num">7&nbsp;j/7</span><span class="lib">Ligne d’écoute dédiée</span></li>
-      <li><span class="num">9</span><span class="lib">Professions accompagnées</span></li>
+      <li><span class="num">2010</span><span class="lib">Création de l’association</span><span class="meta">Toulouse</span></li>
+      <li><span class="num">1&nbsp;700+</span><span class="lib">Soignants accompagnés</span><span class="meta">Chiffre publié par MOTS</span></li>
+      <li><span class="num">7&nbsp;j/7</span><span class="lib">Ligne d’écoute dédiée</span><span class="meta">Gratuite, confidentielle</span></li>
+      <li><span class="num">9</span><span class="lib">Professions accompagnées</span><span class="meta">À ordre, depuis 2018</span></li>
     </ul>
   </div>
 
@@ -713,7 +778,7 @@ td.mono, th.mono { white-space: nowrap; }
             <li class="barre" style="--v:49">
               <span class="barre-lib">Burnout au cours de la carrière<a class="ref" href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" title="Kansoun et al., Journal of Affective Disorders, 2019 — méta-analyse de 37 études, 15 183 médecins" target="_blank" rel="noopener">[1]</a></span>
               <span class="barre-piste" aria-hidden="true"><span class="barre-rempl"></span></span>
-              <span class="barre-val">49,0&nbsp;%</span>
+              <span class="barre-val">49&nbsp;%</span>
             </li>
             <li class="barre" style="--v:66.2">
               <span class="barre-lib">Jeunes médecins&nbsp;: symptômes anxieux<a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a></span>
@@ -762,7 +827,7 @@ td.mono, th.mono { white-space: nowrap; }
         <p class="label">Ce qui fonctionne</p>
         <h3>La bonne nouvelle&nbsp;: l’accompagnement fonctionne.</h3>
         <p>Les interventions individuelles comme organisationnelles produisent des réductions cliniquement significatives du burnout des médecins<a class="ref" href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" title="West, Dyrbye, Erwin &amp; Shanafelt, The Lancet, 2016 — revue systématique et méta-analyse" target="_blank" rel="noopener">[4]</a>.</p>
-        <p style="margin-top:0.75rem"><a href="/science">Lire la synthèse complète des quatre études →</a></p>
+        <p style="margin-top:0.75rem"><a href="/science">Lire la synthèse complète des quatre études&nbsp;→</a></p>
       </div>
     </div>
   </div>
@@ -778,7 +843,7 @@ td.mono, th.mono { white-space: nowrap; }
         <li><span class="etape-num">ÉTAPE 2</span><h3>Un pair vous reçoit</h3><p>Un médecin effecteur — formé au soin des soignants — vous propose un entretien confraternel strictement confidentiel.</p></li>
         <li><span class="etape-num">ÉTAPE 3</span><h3>Vous avancez, accompagné·e</h3><p>Santé, travail, organisation&nbsp;: un accompagnement global sur plusieurs semaines, avec un objectif — retrouver votre autonomie.</p></li>
       </ol>
-      <p style="margin-top:1.5rem"><a href="/aide-accompagnement">Découvrir le dispositif complet →</a></p>
+      <p style="margin-top:1.5rem"><a href="/aide-accompagnement">Découvrir le dispositif complet&nbsp;→</a></p>
     </div>
   </div>
 
@@ -823,22 +888,22 @@ td.mono, th.mono { white-space: nowrap; }
         <p class="article-meta"><span>4 études publiées</span><span>2016 – 2019</span><span>Synthèse proposée par cette démonstration</span></p>
         <div class="resume">
           <p class="label">Résumé</p>
-          <p>Deux méta-analyses et une enquête nationale établissent l’ampleur de la souffrance des médecins en France<a class="ref" href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" title="Kansoun et al., Journal of Affective Disorders, 2019 — méta-analyse de 37 études, 15 183 médecins" target="_blank" rel="noopener">[1]</a> <a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a> et un excès de mortalité par suicide chez les médecins par rapport à la population générale<a class="ref" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" title="Dutheil et al., PLOS ONE, 2019 — méta-analyse de 25 études" target="_blank" rel="noopener">[2]</a>. Une revue systématique publiée dans <cite>The Lancet</cite> montre que les interventions individuelles et organisationnelles réduisent le burnout de façon cliniquement significative<a class="ref" href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" title="West, Dyrbye, Erwin &amp; Shanafelt, The Lancet, 2016 — revue systématique et méta-analyse" target="_blank" rel="noopener">[4]</a>. Le dispositif MOTS — écoute et accompagnement par des pairs formés, gratuits et confidentiels — s’inscrit dans cette logique.</p>
+          <p>Une méta-analyse<a class="ref" href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" title="Kansoun et al., Journal of Affective Disorders, 2019 — méta-analyse de 37 études, 15 183 médecins" target="_blank" rel="noopener">[1]</a> et une enquête nationale<a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a> établissent l’ampleur de la souffrance des médecins en France&nbsp;; une seconde méta-analyse<a class="ref" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" title="Dutheil et al., PLOS ONE, 2019 — méta-analyse de 25 études" target="_blank" rel="noopener">[2]</a> établit un excès de mortalité par suicide chez les médecins par rapport à la population générale. Une revue systématique publiée dans <cite>The Lancet</cite> montre que les interventions individuelles et organisationnelles réduisent le burnout de façon cliniquement significative<a class="ref" href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" title="West, Dyrbye, Erwin &amp; Shanafelt, The Lancet, 2016 — revue systématique et méta-analyse" target="_blank" rel="noopener">[4]</a>. Le dispositif MOTS — écoute et accompagnement par des pairs formés, gratuits et confidentiels — s’inscrit dans cette logique.</p>
         </div>
       </header>
 
       <div class="article-corps">
         <section class="article-section" aria-labelledby="s1">
           <h2 id="s1"><span class="sec-num">1.</span>Prévalence&nbsp;: un médecin sur deux</h2>
-          <p>Une méta-analyse de 37 études portant sur 15&nbsp;183 médecins français estime à <span class="donnee">49&nbsp;%</span> la proportion de médecins touchés par le burnout au cours de leur carrière, dont <span class="donnee donnee--alerte">5&nbsp;%</span> sous une forme sévère<a class="ref" href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" title="Kansoun et al., Journal of Affective Disorders, 2019 — méta-analyse de 37 études, 15 183 médecins" target="_blank" rel="noopener">[1]</a>.</p>
-          <p>Le constat commence dès la formation. L’enquête nationale de 2017, conduite par l’ANEMF, l’ISNAR-IMG, l’ISNCCA et l’ISNI auprès d’environ 22&nbsp;000 répondants, relève <span class="donnee">66,2&nbsp;%</span> de jeunes médecins présentant des symptômes anxieux et <span class="donnee">27,7&nbsp;%</span> des symptômes dépressifs<a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a>. <span class="donnee donnee--alerte">23,7&nbsp;%</span> déclarent avoir déjà eu des idées suicidaires, dont <span class="donnee donnee--alerte">5,8&nbsp;%</span> dans le mois précédent<a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a>.</p>
+          <p>Une méta-analyse de 37 études portant sur 15&nbsp;183 médecins français estime à <span class="donnee">49&#8239;%</span> la proportion de médecins touchés par le burnout au cours de leur carrière, dont <span class="donnee donnee--alerte">5&#8239;%</span> sous une forme sévère<a class="ref" href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" title="Kansoun et al., Journal of Affective Disorders, 2019 — méta-analyse de 37 études, 15 183 médecins" target="_blank" rel="noopener">[1]</a>.</p>
+          <p>Le constat commence dès la formation. L’enquête nationale de 2017, conduite par l’ANEMF, l’ISNAR-IMG, l’ISNCCA et l’ISNI auprès d’environ 22&nbsp;000 répondants, relève <span class="donnee">66,2&#8239;%</span> de jeunes médecins présentant des symptômes anxieux et <span class="donnee">27,7&#8239;%</span> des symptômes dépressifs<a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a>. <span class="donnee donnee--alerte">23,7&#8239;%</span> déclarent avoir déjà eu des idées suicidaires, dont <span class="donnee donnee--alerte">5,8&#8239;%</span> dans le mois précédent<a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a>.</p>
           <figure class="fig">
             <figcaption class="fig-titre"><span class="fig-num">Figure 1</span>Prévalences rapportées, en % (échelle 0–100). En bleu&nbsp;: souffrance psychique&nbsp;; en rouge&nbsp;: idées suicidaires.</figcaption>
             <ul class="barres">
               <li class="barre" style="--v:49">
                 <span class="barre-lib">Burnout au cours de la carrière<a class="ref" href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" title="Kansoun et al., Journal of Affective Disorders, 2019 — méta-analyse de 37 études, 15 183 médecins" target="_blank" rel="noopener">[1]</a></span>
                 <span class="barre-piste" aria-hidden="true"><span class="barre-rempl"></span></span>
-                <span class="barre-val">49,0&nbsp;%</span>
+                <span class="barre-val">49&nbsp;%</span>
               </li>
               <li class="barre" style="--v:66.2">
                 <span class="barre-lib">Jeunes médecins&nbsp;: symptômes anxieux<a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a></span>
@@ -869,7 +934,7 @@ td.mono, th.mono { white-space: nowrap; }
         <section class="article-section" aria-labelledby="s2">
           <h2 id="s2"><span class="sec-num">2.</span>Mortalité par suicide&nbsp;: un excès de 44&nbsp;%</h2>
           <p>Une méta-analyse de 25 études publiée dans <cite>PLOS ONE</cite> établit un ratio standardisé de mortalité par suicide de <span class="donnee donnee--alerte">1,44</span> chez les médecins&nbsp;: leur risque de décès par suicide est supérieur de 44&nbsp;% à celui de la population générale<a class="ref" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" title="Dutheil et al., PLOS ONE, 2019 — méta-analyse de 25 études" target="_blank" rel="noopener">[2]</a>.</p>
-          <p>Ce chiffre ne décrit pas une fatalité. Des interventions individuelles et organisationnelles réduisent le burnout de façon cliniquement significative<a class="ref" href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" title="West, Dyrbye, Erwin &amp; Shanafelt, The Lancet, 2016 — revue systématique et méta-analyse" target="_blank" rel="noopener">[4]</a>&nbsp;: la souffrance se repère et s’accompagne.</p>
+          <p>L’étude [4] ne porte pas sur la mortalité par suicide, mais elle montre que les interventions individuelles et organisationnelles réduisent le burnout de façon cliniquement significative<a class="ref" href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" title="West, Dyrbye, Erwin &amp; Shanafelt, The Lancet, 2016 — revue systématique et méta-analyse" target="_blank" rel="noopener">[4]</a>.</p>
           <figure class="fig">
             <figcaption class="fig-titre"><span class="fig-num">Figure 2</span>Ratio standardisé de mortalité (SMR) par suicide, médecins vs population générale<a class="ref" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" title="Dutheil et al., PLOS ONE, 2019 — méta-analyse de 25 études" target="_blank" rel="noopener">[2]</a>. Trait pointillé&nbsp;: référence 1,00.</figcaption>
             <div class="jauge">
@@ -895,13 +960,34 @@ td.mono, th.mono { white-space: nowrap; }
         <section class="article-section" aria-labelledby="s3">
           <h2 id="s3"><span class="sec-num">3.</span>Intervention&nbsp;: l’accompagnement réduit le burnout</h2>
           <p>La revue systématique et méta-analyse de West, Dyrbye, Erwin et Shanafelt, publiée dans <cite>The Lancet</cite> en 2016, montre que les interventions individuelles comme organisationnelles produisent des réductions cliniquement significatives du burnout des médecins<a class="ref" href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" title="West, Dyrbye, Erwin &amp; Shanafelt, The Lancet, 2016 — revue systématique et méta-analyse" target="_blank" rel="noopener">[4]</a>.</p>
-          <p>Ce résultat déplace la question. Il ne s’agit plus de savoir si l’on peut agir, mais de rendre l’aide accessible au moment où elle est nécessaire&nbsp;: sans délai, sans dossier, sans crainte pour sa réputation.</p>
+          <aside class="fiche" aria-labelledby="fiche-4">
+            <p class="fiche-titre" id="fiche-4"><span class="fig-num">Encadré</span>Méthode de l’étude [4] en bref</p>
+            <dl>
+              <div><dt>Plan</dt><dd>Revue systématique et méta-analyse</dd></div>
+              <div><dt>Population</dt><dd>Médecins</dd></div>
+              <div><dt>Interventions</dt><dd>Individuelles et organisationnelles</dd></div>
+              <div><dt>Critère</dt><dd>Burnout des médecins</dd></div>
+              <div><dt>Résultat</dt><dd class="fiche-resultat">Réduction cliniquement significative, pour les deux types d’intervention</dd></div>
+              <div><dt>Source</dt><dd>West, Dyrbye, Erwin &amp; Shanafelt, <cite>The Lancet</cite>, 2016<a class="ref" href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" title="West, Dyrbye, Erwin &amp; Shanafelt, The Lancet, 2016 — revue systématique et méta-analyse" target="_blank" rel="noopener">[4]</a></dd></div>
+            </dl>
+          </aside>
+          <p>Ce résultat déplace la question. Il ne s’agit plus de savoir si l’on peut agir, mais de rendre l’aide accessible&nbsp;: une ligne joignable 7&nbsp;j/7, sans dossier à remplir, dans un cadre strictement confidentiel.</p>
         </section>
 
         <section class="article-section" aria-labelledby="s4">
           <h2 id="s4"><span class="sec-num">4.</span>Implications&nbsp;: le dispositif MOTS</h2>
           <p>Créée en 2010 à Toulouse, l’association MOTS (Médecin · Organisation · Travail · Santé) propose une écoute et un accompagnement confidentiels et gratuits, assurés par des médecins effecteurs formés au soin des soignants — notamment via le diplôme inter-universitaire «&nbsp;Soigner les soignants&nbsp;», co-créé à son initiative en 2015. Depuis 2018, le dispositif est ouvert aux neuf professions de santé à ordre. Plus de 1&nbsp;700 soignants ont été accompagnés.</p>
           <p>Les études citées n’évaluent pas MOTS en particulier. Elles établissent l’ampleur du besoin [1–3] et l’efficacité de l’accompagnement en général [4]. MOTS en est une mise en œuvre concrète, organisée en trois temps&nbsp;: un appel, un entretien confraternel, un accompagnement global vers l’autonomie.</p>
+          <figure class="fig">
+            <figcaption class="fig-titre"><span class="fig-num">Figure 3</span>Le parcours MOTS, de l’appel à l’autonomie.</figcaption>
+            <ol class="schema">
+              <li><span class="etape-num">1 · APPEL</span><strong>Vous appelez</strong><span>Répondant formé, sans jugement, sans dossier. Ligne 7&nbsp;j/7.</span></li>
+              <li><span class="etape-num">2 · ENTRETIEN</span><strong>Un pair vous reçoit</strong><span>Médecin effecteur, entretien confraternel confidentiel.</span></li>
+              <li><span class="etape-num">3 · ACCOMPAGNEMENT</span><strong>Accompagnement global</strong><span>Santé, travail, organisation, sur plusieurs semaines.</span></li>
+              <li class="schema-fin"><span class="etape-num">OBJECTIF</span><strong>Autonomie retrouvée</strong></li>
+            </ol>
+            <p class="fig-note">Schéma établi d’après la description publique du dispositif. Les études [1–4] ne portent pas sur MOTS en particulier.</p>
+          </figure>
         </section>
 
         <section class="article-section" aria-labelledby="s-tab">
@@ -918,7 +1004,7 @@ td.mono, th.mono { white-space: nowrap; }
                   <th scope="row">Kansoun et al., <cite>Journal of Affective Disorders</cite>, 2019</th>
                   <td>Méta-analyse, 37 études</td>
                   <td><span class="donnee">15&nbsp;183</span> médecins français</td>
-                  <td>Burnout au cours de la carrière&nbsp;: <span class="donnee">49&nbsp;%</span>&nbsp;; forme sévère&nbsp;: <span class="donnee donnee--alerte">5&nbsp;%</span></td>
+                  <td>Burnout au cours de la carrière&nbsp;: <span class="donnee">49&#8239;%</span>&nbsp;; forme sévère&nbsp;: <span class="donnee donnee--alerte">5&#8239;%</span></td>
                 </tr>
                 <tr>
                   <td class="mono"><a class="ref" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" title="Dutheil et al., PLOS ONE, 2019 — méta-analyse de 25 études" target="_blank" rel="noopener">[2]</a></td>
@@ -932,7 +1018,7 @@ td.mono, th.mono { white-space: nowrap; }
                   <th scope="row">Enquête nationale santé mentale, 2017</th>
                   <td>Enquête (ANEMF · ISNAR-IMG · ISNCCA · ISNI)</td>
                   <td>≈&nbsp;<span class="donnee">22&nbsp;000</span> répondants, jeunes médecins</td>
-                  <td>Anxiété <span class="donnee">66,2&nbsp;%</span>&nbsp;; dépression <span class="donnee">27,7&nbsp;%</span>&nbsp;; idées suicidaires <span class="donnee donnee--alerte">23,7&nbsp;%</span> (<span class="donnee donnee--alerte">5,8&nbsp;%</span> dans le mois)</td>
+                  <td>Anxiété <span class="donnee">66,2&#8239;%</span>&nbsp;; dépression <span class="donnee">27,7&#8239;%</span>&nbsp;; idées suicidaires <span class="donnee donnee--alerte">23,7&#8239;%</span> (<span class="donnee donnee--alerte">5,8&#8239;%</span> dans le mois)</td>
                 </tr>
                 <tr>
                   <td class="mono"><a class="ref" href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" title="West, Dyrbye, Erwin &amp; Shanafelt, The Lancet, 2016 — revue systématique et méta-analyse" target="_blank" rel="noopener">[4]</a></td>
@@ -965,7 +1051,7 @@ td.mono, th.mono { white-space: nowrap; }
             <li><span class="ref-n">[1]</span><span>Kansoun et al. <cite>Journal of Affective Disorders</cite>, 2019. Méta-analyse de 37 études, 15&nbsp;183 médecins. <a href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" target="_blank" rel="noopener">sciencedirect.com/science/article/abs/pii/S0165032718314873</a></span></li>
             <li><span class="ref-n">[2]</span><span>Dutheil et al. <cite>PLOS ONE</cite>, 2019. Méta-analyse de 25 études. <a href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" target="_blank" rel="noopener">journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361</a></span></li>
             <li><span class="ref-n">[3]</span><span>Enquête nationale santé mentale des jeunes médecins, 2017. ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈&nbsp;22&nbsp;000 répondants. <a href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" target="_blank" rel="noopener">revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats</a></span></li>
-            <li><span class="ref-n">[4]</span><span>West CP, Dyrbye LN, Erwin PJ, Shanafelt TD. <cite>The Lancet</cite>, 2016. Revue systématique et méta-analyse. <a href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" target="_blank" rel="noopener">thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract</a></span></li>
+            <li><span class="ref-n">[4]</span><span>West, Dyrbye, Erwin &amp; Shanafelt. <cite>The Lancet</cite>, 2016. Revue systématique et méta-analyse. <a href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" target="_blank" rel="noopener">thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract</a></span></li>
           </ol>
         </section>
       </div>
@@ -1369,6 +1455,8 @@ td.mono, th.mono { white-space: nowrap; }
   })
   majTheme()
   try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', majTheme) } catch (e) {}
+  // Libellé toujours juste, même si data-theme change hors du bouton
+  try { new MutationObserver(majTheme).observe(racine, { attributes: true, attributeFilter: ['data-theme'] }) } catch (e) {}
 
   // Portail
   var portail = document.getElementById('portail')

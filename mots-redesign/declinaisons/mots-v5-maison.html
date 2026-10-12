@@ -1,4 +1,4 @@
-<title>MOTS — Prendre soin de ceux qui soignent</title>
+<title>MOTS — Prendre soin des soignants</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <meta name="description" content="Proposition de refonte non officielle du site de l’Association MOTS — écoute et accompagnement confidentiels des professionnels de santé en difficulté.">
@@ -23,7 +23,6 @@
   --trait: rgba(31, 27, 22, .14);
   --bouton-fond: #1f1b16;
   --bouton-texte: #f6f1e6;
-  --bouton-survol: #3a332a;
   --bandeau-fond: #1f1b16;
   --bandeau-texte: #efe7d6;
   --bandeau-lien: #e2c27f;
@@ -63,7 +62,6 @@
     --trait: rgba(236, 228, 211, .16);
     --bouton-fond: #ece4d3;
     --bouton-texte: #0f1218;
-    --bouton-survol: #d8cfbd;
     --bandeau-fond: #07090d;
     --bandeau-texte: #ece4d3;
     --bandeau-lien: #e2c27f;
@@ -86,7 +84,6 @@
   --trait: rgba(236, 228, 211, .16);
   --bouton-fond: #ece4d3;
   --bouton-texte: #0f1218;
-  --bouton-survol: #d8cfbd;
   --bandeau-fond: #07090d;
   --bandeau-texte: #ece4d3;
   --bandeau-lien: #e2c27f;
@@ -193,15 +190,18 @@ svg { display: block; }
   border: 1px solid var(--bouton-fond); border-radius: 0;
   box-shadow: inset 0 0 0 3px var(--bouton-fond), inset 0 0 0 4px var(--or);
   text-decoration: none; cursor: pointer; text-align: center;
-  transition: background-color var(--duree);
+  transition: background-color var(--duree), box-shadow var(--duree);
 }
-.bouton:hover { background: var(--bouton-survol); }
+/* Survol : le fond reste à l'encre, seul le filet or intérieur s'affirme (1px → 2px) */
+.bouton:hover { box-shadow: inset 0 0 0 3px var(--bouton-fond), inset 0 0 0 5px var(--or); }
 .bouton:focus-visible { box-shadow: inset 0 0 0 3px var(--bouton-fond), inset 0 0 0 4px var(--or), 0 0 0 3px var(--focus-halo); }
+.bouton:hover:focus-visible { box-shadow: inset 0 0 0 3px var(--bouton-fond), inset 0 0 0 5px var(--or), 0 0 0 3px var(--focus-halo); }
 .bouton-filet {
   background: transparent; color: var(--encre);
   border: 1px solid var(--or); box-shadow: none;
 }
-.bouton-filet:hover { background: var(--papier); }
+.bouton-filet:hover { background: var(--papier); box-shadow: none; }
+.bouton-filet:hover:focus-visible { box-shadow: 0 0 0 3px var(--focus-halo); }
 .bouton-filet:focus-visible { box-shadow: 0 0 0 3px var(--focus-halo); }
 .bouton .num { letter-spacing: .08em; font-variant-caps: normal; }
 .lien-suite { font-variant-caps: all-small-caps; letter-spacing: .14em; font-size: 1.05rem; }
@@ -330,7 +330,17 @@ main { display: block; }
 .appel-texte { font-size: .7em; vertical-align: super; line-height: 0; }
 .appel-texte a { color: var(--or-appel); text-decoration: none; padding: 0 .1em; }
 .gravure p:not(.chiffre) { color: var(--encre-2); }
-.gravure .chiffre { font-size: clamp(3.25rem, 2rem + 4.2vw, 5.25rem); }
+.gravure .chiffre {
+  font-size: clamp(3.25rem, 2rem + 4.2vw, 5.25rem);
+  padding-bottom: .55rem;
+  background: linear-gradient(var(--or), var(--or)) left bottom / 2.5rem 1px no-repeat;
+}
+/* Empilées (mobile, tablette) : la gravure reprend l'axe central de la maison */
+@media (max-width: 59.99rem) {
+  .gravure { text-align: center; justify-items: center; }
+  .gravure p { margin-inline: auto; }
+  .gravure .chiffre { background-position: center bottom; }
+}
 .sortie {
   margin: 2.25rem auto 0; max-width: 46rem; text-align: center; font-style: italic; color: var(--encre-2);
   padding: 1rem 0; border-block: 1px solid var(--filet-doux);
@@ -367,7 +377,8 @@ main { display: block; }
 .detail { list-style: none; display: grid; gap: .35rem; color: var(--encre-2); width: 100%; max-width: 30rem; text-align: left; }
 .detail li { display: flex; gap: .9rem; align-items: baseline; border-bottom: 1px solid var(--trait); padding: .4rem 0; max-width: var(--mesure); }
 .detail .num { min-width: 4.2rem; color: var(--encre); font-size: 1.15rem; }
-.methode { font-size: var(--t-petit); color: var(--encre-2); display: flex; flex-wrap: wrap; justify-content: center; gap: .25rem .8rem; align-items: baseline; }
+/* Gabarit unique pour les quatre planches : intitulé or au-dessus, méthode centrée dessous */
+.methode { font-size: var(--t-petit); color: var(--encre-2); display: grid; justify-items: center; gap: .3rem; }
 .methode b { font-weight: 400; font-size: var(--t-label); text-transform: uppercase; letter-spacing: .26em; color: var(--or-texte); }
 .source { font-size: var(--t-petit); color: var(--encre-2); }
 .planche-filet { border: 0; border-top: 1px solid var(--or); width: 4rem; margin: .25rem auto; }
@@ -380,6 +391,13 @@ main { display: block; }
 .guillemets::before { content: "\00AB"; content: "\00AB" / ""; left: 0; top: -.14em; }
 .guillemets::after { content: "\00BB"; content: "\00BB" / ""; right: 0; bottom: -.1em; }
 .citation .citation-texte.guillemets { max-width: 36rem; }
+/* Petit écran : guillemets dans le fil du texte plutôt qu'en marge */
+@media (max-width: 30rem) {
+  .guillemets { padding-inline: 0; }
+  .guillemets::before, .guillemets::after { position: static; font-size: 1.5em; line-height: 0; vertical-align: -.12em; }
+  .guillemets::before { margin-right: .18em; }
+  .guillemets::after { margin-left: .18em; }
+}
 .planche .intitule-planche { margin: 0 auto; font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.4rem); line-height: 1.2; text-wrap: balance; max-width: 18ch; }
 
 /* ---------- Parcours I / II / III ---------- */
@@ -493,6 +511,34 @@ main { display: block; }
   background: none; color: var(--encre-2); border: 1px solid var(--filet); padding: .45rem .9rem; cursor: pointer; border-radius: 0;
 }
 .bascule:hover { color: var(--encre); }
+
+/* Pied de page empilé : papier à lettres centré, blocs séparés par des filets */
+@media (max-width: 55.99rem) {
+  .pied-haut { text-align: center; gap: 0; }
+  .pied-haut > * + * { border-top: 1px solid var(--filet-doux); padding-top: 1.75rem; margin-top: 1.75rem; }
+  .pied-marque { justify-items: center; }
+  .pied-marque .monogramme { margin-inline: auto; }
+  .pied-nom { padding-left: .34em; }
+  .pied-haut p { margin-inline: auto; }
+  .pied-liens a { font-variant-caps: all-small-caps; letter-spacing: .12em; font-size: 1.08rem; }
+  .pied-bas { justify-content: center; text-align: center; }
+}
+
+/* Pages qui portent déjà leur encadré d'urgence : celui du pied se réduit à une ligne sous filet */
+#site:has(.vue:not([hidden]) .urgence) .pied .urgence { border: 0; padding: 0; background: none; }
+#site:has(.vue:not([hidden]) .urgence) .pied .urgence > div {
+  border: 0; border-top: 1px solid var(--filet-doux); padding: 1rem 0 0;
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: .25rem .8rem; text-align: center;
+}
+#site:has(.vue:not([hidden]) .urgence) .pied .urgence-ligne { display: contents; }
+#site:has(.vue:not([hidden]) .urgence) .pied .urgence-num { font-size: 1.25rem; padding-bottom: 0; }
+#site:has(.vue:not([hidden]) .urgence) .pied .urgence-ligne p { flex: 0 1 auto; max-width: none; font-size: var(--t-petit); color: var(--encre-2); }
+
+/* Intitulés en capitales espacées : interlettrage resserré et coupure équilibrée sur petit écran */
+.surtitre, .portail-ligne, .urgence-titre { text-wrap: balance; }
+@media (max-width: 30rem) {
+  .surtitre, .portail-ligne, .urgence-titre, .pied h2 { letter-spacing: .18em; }
+}
 </style>
 
 <div class="bandeau" id="bandeau">
@@ -511,13 +557,13 @@ main { display: block; }
         <text x="50" y="64" text-anchor="middle" font-size="42">M</text>
       </svg>
       <p class="portail-asso">Association MOTS</p>
-      <h1 id="portail-titre" class="portail-devise">Prendre soin de ceux qui soignent</h1>
+      <h1 id="portail-titre" class="portail-devise">Prendre soin des soignants</h1>
       <div class="fleuron" aria-hidden="true"><span></span></div>
-      <p class="portail-chiffre num">+44&nbsp;%</p>
-      <p class="portail-enonce" id="portail-desc">de risque de décès par suicide chez les médecins, par rapport à la population générale.</p>
-      <p class="portail-source"><a href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" target="_blank" rel="noopener">Dutheil et al., <i>PLOS ONE</i>, 2019</a> — méta-analyse de 25 études</p>
+      <p class="portail-chiffre num">1&nbsp;700+</p>
+      <p class="portail-enonce" id="portail-desc">soignants accompagnés par l’association depuis sa création, en 2010.</p>
+      <p class="portail-source">Médecin · Organisation · Travail · Santé</p>
       <div class="fleuron" aria-hidden="true"><span></span></div>
-      <p class="portail-ligne">Ligne d’écoute des soignants · 7&nbsp;j/7</p>
+      <p class="portail-ligne">Ligne d’écoute des soignants&nbsp;·&nbsp;7&nbsp;j/7</p>
       <p><a class="numero-souligne" href="tel:+33608282589">06 08 28 25 89</a></p>
       <p class="portail-recours">Confidentielle et gratuite. Si des idées suicidaires vous traversent, le <a href="tel:3114">3114</a> répond aussi, 24&nbsp;h/24.</p>
       <button type="button" class="bouton" id="portail-entrer" data-entrer>Entrer dans le site</button>
@@ -537,7 +583,7 @@ main { display: block; }
     <p class="entete-asso" aria-hidden="true">Association</p>
     <p class="entete-nom" aria-hidden="true">MOTS</p>
   </a>
-  <p class="entete-devise">Prendre soin de ceux qui soignent</p>
+  <p class="entete-devise">Prendre soin des soignants</p>
   <hr class="double-filet">
   <nav class="nav" aria-label="Navigation principale">
     <ul>
@@ -733,8 +779,8 @@ main { display: block; }
         <p class="chiffre num">49&nbsp;%</p>
       </div>
       <div class="planche-corps">
-        <h2 id="et1">Un médecin français sur deux traverse un burnout au cours de sa carrière</h2>
-        <p class="enonce">49&nbsp;% des médecins français sont touchés par le burnout au cours de leur carrière, dont 5&nbsp;% sous une forme sévère.</p>
+        <h2 id="et1">Près d’un médecin français sur deux touché par le burnout au cours de sa carrière (49&nbsp;%)</h2>
+        <p class="enonce">Chez 5&nbsp;% des médecins français, il prend une forme sévère.</p>
         <p class="methode"><b>Méthode</b><span>Méta-analyse · 37 études · <span class="num">15&nbsp;183</span> médecins</span></p>
         <p class="source"><cite>Kansoun et al., Journal of Affective Disorders</cite>, 2019.</p>
         <hr class="planche-filet">
@@ -1196,7 +1242,7 @@ main { display: block; }
           <text x="50" y="64" text-anchor="middle" font-size="42">M</text>
         </svg>
         <p class="pied-nom">MOTS</p>
-        <p class="pied-devise">Prendre soin de ceux qui soignent</p>
+        <p class="pied-devise">Prendre soin des soignants</p>
         <p style="color:var(--encre-2);font-size:var(--t-petit)">Médecin · Organisation · Travail · Santé. Des soignants formés pour écouter et accompagner les soignants en difficulté, en toute confidentialité, depuis 2010.</p>
       </div>
       <nav aria-label="Pages du site">
@@ -1295,7 +1341,7 @@ main { display: block; }
   var vues = Array.prototype.slice.call(document.querySelectorAll('.vue'))
   var liensNav = Array.prototype.slice.call(document.querySelectorAll('[data-nav]'))
   var titres = {
-    '/': 'MOTS — Prendre soin de ceux qui soignent',
+    '/': 'MOTS — Prendre soin des soignants',
     '/science': 'La science — MOTS',
     '/aide-accompagnement': 'Aide & accompagnement — MOTS',
     '/je-deviens-adherent': 'Devenir adhérent — MOTS',

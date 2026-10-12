@@ -410,8 +410,9 @@ a:hover { color: var(--cuivre-vif); }
 .prose p strong { color: var(--encre); font-weight: 400; }
 
 /* ---------- Héro accueil ---------- */
+.hero { --fs-hero: clamp(2.8rem, 1.5rem + 5.4vw, 6.4rem); }
 .hero .chapo { padding-top: clamp(2.5rem, 4vw, 4.5rem); }
-.hero h1 { font-size: clamp(2.8rem, 1.5rem + 5.4vw, 6.4rem); line-height: 0.98; }
+.hero h1 { font-size: var(--fs-hero); line-height: 0.98; }
 .hero h1 .ligne2 { display: block; padding-left: clamp(0rem, 5vw, 5rem); font-style: italic; }
 
 /* ---------- Chiffres en quinconce ---------- */
@@ -480,6 +481,11 @@ a:hover { color: var(--cuivre-vif); }
 }
 .marche h3 { font-size: var(--fs-h3); }
 .marche p { color: var(--encre-2); max-width: 46ch; }
+/* Sous 64em : l'escalier se lit encore, chaque temps descend d'une demi-marche */
+@media (max-width: 63.99em) {
+  .marche:nth-child(2) { margin-left: 1.5rem; }
+  .marche:nth-child(3) { margin-left: 3rem; }
+}
 
 /* ---------- Professions ---------- */
 .professions {
@@ -504,6 +510,7 @@ a:hover { color: var(--cuivre-vif); }
   display: grid;
   gap: 1.75rem;
 }
+.appel-texte { display: grid; gap: 1.15rem; }
 .appel h2 { font-size: var(--fs-h2); max-width: 18ch; }
 .appel h2 em { color: var(--cuivre); }
 .appel p { color: var(--encre-2); max-width: var(--mesure); }
@@ -708,12 +715,15 @@ a:hover { color: var(--cuivre-vif); }
     padding: 1.1rem 1.25rem 1.1rem 0;
   }
 
-  /* Le chiffre géant déborde légèrement dans la gouttière */
-  .double--a .geant { margin-left: -0.05em; }
-  .double--b .geant { margin-right: -0.05em; }
+  /* Le chiffre géant s'aligne sur la colonne : pas de faux débord dans la gouttière */
+  .double--a .geant, .double--b .geant { margin-inline: 0; }
 
-  /* Héros : l'encart ligne d'écoute s'aligne sur le pied de la colonne texte */
-  .hero .chapo-folio { align-self: end; margin-top: 0; }
+  /* Héros : l'encart ligne d'écoute tient la colonne droite, son filet cuivre
+     aligné sur la 2e ligne du titre (kicker + espacement + 1 ligne de h1) */
+  .hero .chapo-folio {
+    align-self: start;
+    margin-top: calc(var(--fs-label) * 1.5 + 1.4rem + var(--fs-hero) * 0.98);
+  }
   .double--fin .double-texte { grid-column: 8 / span 5; padding-top: 1rem; }
 
   /* Colonnes décalées */
@@ -849,8 +859,8 @@ a:hover { color: var(--cuivre-vif); }
     <div class="chapo" style="padding-top:0">
       <div class="chapo-texte">
         <p class="kicker">Ce que dit la science</p>
-        <h2 id="t-science" style="font-size:var(--fs-h2)">Quatre études, <em class="accent">une</em> même conclusion.</h2>
-        <p class="lead">L’épuisement des soignants est mesuré, documenté, publié. Et l’accompagnement, lui aussi, a fait ses preuves.</p>
+        <h2 id="t-science" style="font-size:var(--fs-h2)">L’épuisement des soignants n’est pas un ressenti. Il est <em class="accent">mesuré</em>.</h2>
+        <p class="lead">Quatre études de référence, documentées et publiées. Et l’accompagnement, lui aussi, a fait ses preuves.</p>
       </div>
       <div class="chapo-folio">
         <p class="folio">Dossier · <b>04</b> études<br>2016 — 2019<br>Sources liées</p>
@@ -932,7 +942,7 @@ a:hover { color: var(--cuivre-vif); }
     <div class="grille">
       <div class="decale-gauche tete-section" style="margin-bottom:0">
         <p class="kicker">Pour qui</p>
-        <h2 id="t-professions">Neuf professions, <em>une</em> même ligne.</h2>
+        <h2 id="t-professions">Neuf professions, une même <em>ligne</em>.</h2>
         <p class="secondaire" style="max-width:40ch">Depuis 2018, le dispositif est ouvert aux neuf professions de santé à ordre, quel que soit votre mode d’exercice ou votre spécialité.</p>
       </div>
       <div class="decale-droite-bas">
@@ -1019,7 +1029,7 @@ a:hover { color: var(--cuivre-vif); }
         <p>Ce n’est pas une fragilité individuelle&nbsp;: c’est l’ordre de grandeur d’une profession entière.</p>
         <div class="source">
           <span class="label">Source</span>
-          <span>Kansoun Z., et al. — <cite>Journal of Affective Disorders</cite>, 2019. Méta-analyse, 37 études, 15&nbsp;183 médecins.</span>
+          <span>Kansoun et al. —<cite>Journal of Affective Disorders</cite>, 2019. Méta-analyse, 37 études, 15&nbsp;183 médecins.</span>
           <a href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" target="_blank" rel="noopener">Lire la publication (sciencedirect.com)</a>
         </div>
       </div>
@@ -1034,7 +1044,7 @@ a:hover { color: var(--cuivre-vif); }
         <p>Derrière ce ratio, des confrères et des consœurs. C’est pour cela qu’une ligne existe, et qu’elle répond.</p>
         <div class="source">
           <span class="label">Source</span>
-          <span>Dutheil F., et al. — <cite>PLOS ONE</cite>, 2019. Méta-analyse, 25 études.</span>
+          <span>Dutheil et al. —<cite>PLOS ONE</cite>, 2019. Méta-analyse, 25 études.</span>
           <a href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" target="_blank" rel="noopener">Lire la publication (journals.plos.org)</a>
         </div>
       </div>
@@ -1093,7 +1103,7 @@ a:hover { color: var(--cuivre-vif); }
         <p>C’est le sens du dispositif MOTS&nbsp;: une écoute, un pair, un accompagnement dans la durée — et une organisation du travail qui peut, elle aussi, être repensée.</p>
         <div class="source">
           <span class="label">Source</span>
-          <span>West C. P., Dyrbye L. N., Erwin P. J., Shanafelt T. D. — <cite>The Lancet</cite>, 2016. Revue systématique et méta-analyse.</span>
+          <span>West, Dyrbye, Erwin &amp; Shanafelt —<cite>The Lancet</cite>, 2016. Revue systématique et méta-analyse.</span>
           <a href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" target="_blank" rel="noopener">Lire la publication (thelancet.com)</a>
         </div>
       </div>
@@ -1225,7 +1235,7 @@ a:hover { color: var(--cuivre-vif); }
       </div>
       <div style="display:grid;gap:1.25rem">
         <a class="tel-geant" href="tel:+33608282589">06 08 28 25 89</a>
-        <p class="secondaire" style="font-size:var(--fs-small)">Urgence suicidaire&nbsp;: <a href="tel:3114">3114</a>, gratuit, 24&nbsp;h/24.</p>
+        <p class="secondaire" style="font-size:var(--fs-small)">Pensées suicidaires&nbsp;: <a href="tel:3114">3114</a>, numéro national de prévention du suicide, gratuit, 24&nbsp;h/24. En cas d’urgence vitale immédiate&nbsp;: <a href="tel:15">15</a>.</p>
         <a class="lien-suite" href="/faq" style="justify-self:start">Consulter les questions fréquentes</a>
       </div>
     </div>

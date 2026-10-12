@@ -280,6 +280,18 @@ small { font-size: var(--t-s); }
   padding-right: 2.5rem;
 }
 .nav ul[data-fin] { -webkit-mask-image: none; mask-image: none; }
+/* Pastille « › » posée sur le fondu : signale qu'il reste des onglets à droite (FAQ, Adhérer, Nous écrire), s'efface en fin de course */
+.nav { position: relative; }
+.nav::after {
+  content: "›"; content: "›" / "";
+  position: absolute; right: 0; top: .5rem;
+  width: 1.75rem; height: 1.75rem; display: grid; place-items: center;
+  border-radius: 999px; background: var(--carte); border: 1px solid var(--bord-fort); box-shadow: var(--ombre-douce);
+  color: var(--encre-2); font-weight: 800; font-size: 1.15rem; line-height: 1; padding-bottom: .12rem;
+  pointer-events: none; transition: opacity .2s ease;
+}
+.nav:has(ul[data-fin])::after { opacity: 0; }
+@media (max-width: 39.99rem) { .nav a { padding-inline: .75rem; } }
 @media (min-width: 40rem) {
   /* Largeur fixe : « Clair » et « Sombre » occupent la même place, rien ne bouge à la bascule */
   .bascule-texte { display: inline-block; min-width: 3.9em; text-align: left; }
@@ -289,6 +301,7 @@ small { font-size: var(--t-s); }
   .entete-ligne { flex-wrap: nowrap; }
   .nav { order: 0; width: auto; }
   .nav ul { padding: 0; -webkit-mask-image: none; mask-image: none; }
+  .nav::after { display: none; }
   .marque { margin-right: 0; }
   .nav { margin-right: auto; margin-left: .5rem; }
   .nav a { padding: .45rem .65rem; }
@@ -394,21 +407,23 @@ small { font-size: var(--t-s); }
 .heros .blob-c { width: 10rem; height: 10rem; left: 45%; top: 12%; }
 .heros-grille {
   position: relative; z-index: 1;
-  display: grid; gap: 2rem; align-items: center;
+  display: grid; gap: 1.5rem 2rem; align-items: center;
 }
-.heros-illu { width: min(100%, 24rem); justify-self: center; }
+/* Petit format : illustration resserrée (viewBox recadré, ~180 px de haut) pour garder le rythme texte → cercles → chiffres */
+.heros-illu { width: min(78%, 16.5rem); justify-self: center; }
 .heros-illu svg { display: block; width: 100%; height: auto; }
+.illu-ensemble .appui { transform-box: fill-box; transform-origin: 50% 100%; }
 .rassure { display: flex; gap: .6rem; align-items: flex-start; margin-top: 1.25rem; color: var(--encre-2); font-size: var(--t-s); }
 .rassure svg { width: 1.3rem; height: 1.3rem; flex: none; margin-top: .1rem; fill: none; stroke: var(--sauge-fort); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 @media (min-width: 56rem) {
   .heros-grille { grid-template-columns: 1.25fr .85fr; }
-  .heros-illu { width: 100%; max-width: 26rem; }
+  .heros-illu { width: 100%; max-width: 27rem; }
 }
 
 /* ===== En-tête de page interne ===== */
 .entete-page { position: relative; overflow: hidden; }
 .entete-page .blob-a { width: 26rem; height: 26rem; right: -9rem; top: -9rem; }
-.entete-page .blob-b { width: 12rem; height: 12rem; right: 18%; bottom: -5rem; }
+.entete-page .blob-b { width: 16rem; height: 16rem; left: -7rem; bottom: -6rem; } /* ancré au bord, déborde hors cadre comme sur l'accueil */
 .entete-page .enveloppe { position: relative; z-index: 1; }
 .entete-page h1 { max-width: 20ch; }
 
@@ -573,6 +588,8 @@ small { font-size: var(--t-s); }
 .barre-piste { display: flex; height: 2.3rem; background: var(--fond-2); border-radius: 999px; overflow: hidden; }
 .barre { display: flex; align-items: center; justify-content: flex-end; width: calc(var(--v) * 1%); height: 100%; font-weight: 800; font-size: var(--t-s); color: var(--sur-safran); padding-right: .6rem; white-space: nowrap; }
 .barre-val { font-weight: 800; font-variant-numeric: tabular-nums; text-align: right; font-size: var(--t-l); }
+/* Écart affiché hors de la barre, sous la valeur : le segment safran reste une simple aire de couleur */
+.barre-ecart { display: block; font-size: var(--t-xs); font-weight: 800; line-height: 1.2; color: var(--safran-fort); white-space: nowrap; }
 .b-ciel { background: var(--ciel); }
 .b-ciel-pale { background: var(--ciel); opacity: .55; }
 .b-safran { background: var(--safran); }
@@ -781,7 +798,19 @@ small { font-size: var(--t-s); }
         <p class="rassure"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>Un répondant formé vous écoute, sans jugement et sans dossier à remplir.</p>
       </div>
       <div class="heros-illu" aria-hidden="true">
-        <svg class="illu-cercles" viewBox="0 0 400 370"><use href="#illu-cercles"/></svg>
+        <!-- Suite du portail : les cercles se sont rapprochés, le petit a rejoint le groupe, tous s'appuient les uns sur les autres -->
+        <svg class="illu-cercles illu-ensemble" viewBox="22 92 368 272">
+          <ellipse class="f-sol" cx="205" cy="350" rx="180" ry="11"/>
+          <circle class="f-ciel" cx="128" cy="262" r="88"/>
+          <path class="s-reflet" d="M76 226a64 64 0 0 1 38-36"/>
+          <circle class="f-sauge" cx="284" cy="278" r="72"/>
+          <path class="s-reflet" d="M240 252a52 52 0 0 1 30-28"/>
+          <circle class="f-ciel-pale" cx="315.5" cy="181.5" r="30"/>
+          <g class="appui">
+            <circle class="f-safran" cx="231" cy="159" r="58"/>
+            <path class="s-reflet" d="M193 141a42 42 0 0 1 24-24"/>
+          </g>
+        </svg>
       </div>
     </div>
   </div>
@@ -936,8 +965,8 @@ small { font-size: var(--t-s); }
       <div class="chapitre-texte">
         <p class="etiquette">Le burnout</p>
         <span class="etude-chiffre c-safran num">49&nbsp;%</span>
-        <h2>Prenez cent médecins français. Quarante-neuf traverseront un burnout.</h2>
-        <p>C’est la proportion de médecins touchés par le burnout au cours de leur carrière. Pour 5&nbsp;% d’entre eux, sous une forme sévère. Si vous vous reconnaissez, vous n’êtes ni faible ni isolé·e&nbsp;: vous êtes dans la moitié.</p>
+        <h2>Sur cent médecins français, quarante-neuf ont été touchés par le burnout au cours de leur carrière.</h2>
+        <p>Cinq d’entre eux sous une forme sévère. Si vous vous reconnaissez, vous n’êtes ni faible ni isolé·e&nbsp;: près d’un médecin sur deux est concerné.</p>
         <dl class="methodo">
           <dt>Méthode</dt><dd>Méta-analyse de 37 études</dd>
           <dt>Effectif</dt><dd class="num">15 183 médecins</dd>
@@ -947,7 +976,7 @@ small { font-size: var(--t-s); }
         </dl>
       </div>
       <figure class="figure">
-        <div class="grille-100" role="img" aria-label="Sur 100 médecins, 49 touchés par le burnout au cours de leur carrière, dont 5 sous une forme sévère ; 51 épargnés.">
+        <div class="grille-100" role="img" aria-label="Sur 100 médecins, 49 touchés par le burnout au cours de leur carrière, dont 5 sous une forme sévère ; 51 non touchés dans l’étude.">
           <i class="p sev"></i><i class="p sev"></i><i class="p sev"></i><i class="p sev"></i><i class="p sev"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i>
           <i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i>
           <i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i><i class="p on"></i>
@@ -962,7 +991,7 @@ small { font-size: var(--t-s); }
         <ul class="legende" aria-hidden="true">
           <li><span class="p sev"></span>Forme sévère&nbsp;: 5</li>
           <li><span class="p on"></span>Burnout&nbsp;: 49 au total</li>
-          <li><span class="p"></span>Épargnés&nbsp;: 51</li>
+          <li><span class="p"></span>Non touchés dans l’étude&nbsp;: 51</li>
         </ul>
         <figcaption>Chaque point représente un médecin sur cent. Les 49 points safran comptent les 5 formes sévères, marquées d’un cœur sombre.</figcaption>
       </figure>
@@ -996,8 +1025,8 @@ small { font-size: var(--t-s); }
             </div>
             <div class="barre-ligne">
               <span class="barre-nom">Médecins</span>
-              <span class="barre-piste"><span class="barre b-safran-pale" style="--v:69.44"></span><span class="barre b-safran" style="--v:30.56">+44&nbsp;%</span></span>
-              <span class="barre-val num">1,44</span>
+              <span class="barre-piste"><span class="barre b-safran-pale" style="--v:69.44"></span><span class="barre b-safran" style="--v:30.56"></span></span>
+              <span class="barre-val num">1,44<span class="barre-ecart">+44&nbsp;%</span></span>
             </div>
           </div>
           <figcaption>Un SMR de 1,00 correspond au niveau de référence, celui de la population générale. Chez les médecins, il atteint 1,44&nbsp;: la part en safran plein représente les 44&nbsp;% supplémentaires.</figcaption>
@@ -1066,7 +1095,7 @@ small { font-size: var(--t-s); }
         <p class="etiquette">La bonne nouvelle</p>
         <h2>Vous connaissez les chiffres. Voici la sortie.</h2>
         <p class="chapo">L’accompagnement fonctionne. Les interventions individuelles comme organisationnelles produisent des réductions cliniquement significatives du burnout des médecins.</p>
-        <p>Agir sur la personne et sur l’organisation du travail&nbsp;: c’est précisément l’approche que porte MOTS, avec une écoute entre pairs et un accompagnement qui regarde la santé, le travail et l’organisation ensemble.</p>
+        <p>MOTS propose une écoute entre pairs et un accompagnement global qui regarde ensemble la santé, le travail et l’organisation.</p>
         <dl class="methodo">
           <dt>Méthode</dt><dd>Revue systématique et méta-analyse</dd>
           <dt>Revue</dt><dd><i>The Lancet</i>, 2016</dd>
@@ -1455,7 +1484,7 @@ small { font-size: var(--t-s); }
     <div class="grille-cartes">
       <div class="carte">
         <h3>Contenus</h3>
-        <p>Les textes ont été rédigés à partir d’informations publiquement disponibles. Les chiffres cités renvoient chacun à leur source scientifique d’origine, liée sur la page <a href="/science">Ce que disent les études</a>.</p>
+        <p>Les textes ont été rédigés à partir d’informations publiquement disponibles. Les données scientifiques citées (burnout, risque suicidaire, santé mentale des jeunes médecins, efficacité de l’accompagnement) renvoient chacune à leur source d’origine, liée sur la page <a href="/science">Ce que disent les études</a>. Les chiffres de l’association proviennent de ses informations publiques (site officiel&nbsp;: <a class="ext" href="https://www.association-mots.org" target="_blank" rel="noopener">association-mots.org<svg aria-hidden="true"><use href="#ico-ext"/></svg></a>).</p>
       </div>
       <div class="carte">
         <h3>Propriété</h3>
@@ -1467,7 +1496,7 @@ small { font-size: var(--t-s); }
       </div>
       <div class="carte">
         <h3>Ressources et hébergement</h3>
-        <p>Ce site ne charge aucune ressource externe&nbsp;: polices du système, illustrations dessinées en SVG. Les informations relatives à l’hébergeur seront complétées au moment d’un éventuel déploiement.</p>
+        <p>Ce site ne charge aucune ressource externe&nbsp;: polices du système ou police libre Nunito (SIL OFL) intégrée au fichier, illustrations dessinées en SVG. Les informations relatives à l’hébergeur seront complétées au moment d’un éventuel déploiement.</p>
       </div>
     </div>
     <aside class="encart-3114" aria-label="Aide immédiate">
