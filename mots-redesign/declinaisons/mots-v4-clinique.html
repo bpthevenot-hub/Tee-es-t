@@ -26,6 +26,9 @@
   --graduation: #c3cbd6;
   --focus: #14508c;
   --focus-halo: #ffffff;
+  --bandeau-fond: #121923;
+  --bandeau-texte: #e9edf2;
+  --bandeau-lien: #ffffff;
 
   --serif: 'Charter', 'Bitstream Charter', 'Sitka Text', 'Georgia', serif;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
@@ -64,6 +67,9 @@
     --graduation: #3a4655;
     --focus: #a9cbf0;
     --focus-halo: #0c1016;
+    --bandeau-fond: #1b2430;
+    --bandeau-texte: #bcc5d1;
+    --bandeau-lien: #e6ebf1;
   }
 }
 :root[data-theme="dark"] {
@@ -87,6 +93,9 @@
   --graduation: #3a4655;
   --focus: #a9cbf0;
   --focus-halo: #0c1016;
+  --bandeau-fond: #1b2430;
+  --bandeau-texte: #bcc5d1;
+  --bandeau-lien: #e6ebf1;
 }
 :root[data-theme="light"] { color-scheme: light; }
 
@@ -159,26 +168,29 @@ a.ref {
   vertical-align: 0.28em;
   line-height: 0;
   padding: 0 0.08em;
+  margin-left: 0.2em;
   white-space: nowrap;
 }
 a.ref:hover { text-decoration: underline; }
+a.ref:focus-visible { outline-width: 2px; outline-offset: 1px; border-radius: 2px; }
 
 /* =========================================================
    Bandeau démo (sticky, hors du portail)
    ========================================================= */
 .bandeau {
   position: sticky; top: 0; z-index: 60;
-  background: var(--encre);
-  color: var(--fond);
+  background: var(--bandeau-fond);
+  color: var(--bandeau-texte);
+  border-bottom: 1px solid var(--filet);
   font-size: 0.8125rem;
   line-height: 1.4;
   padding: 0.5rem var(--gouttiere);
   text-align: left;
 }
 .bandeau p { max-width: none; }
-.bandeau a { color: var(--fond); font-weight: 650; }
-.bandeau a:hover { color: var(--fond); }
-.bandeau a:focus-visible { outline-color: var(--fond); box-shadow: 0 0 0 2px var(--encre); }
+.bandeau a { color: var(--bandeau-lien); font-weight: 650; }
+.bandeau a:hover { color: var(--bandeau-lien); }
+.bandeau a:focus-visible { outline-color: var(--bandeau-lien); box-shadow: 0 0 0 2px var(--bandeau-fond); }
 
 /* =========================================================
    Boutons
@@ -218,11 +230,11 @@ a.ref:hover { text-decoration: underline; }
   #portail.ferme { transition: opacity 0.4s ease, visibility 0s linear 0.4s; }
 }
 .portail-page {
-  max-width: 50rem;
+  max-width: 54rem;
   margin: 0 auto;
-  padding: clamp(1.25rem, 3vw, 2.75rem) var(--gouttiere) 2.5rem;
+  padding: clamp(1rem, 2vw, 2rem) var(--gouttiere) 2.5rem;
 }
-.portail-haut { display: flex; justify-content: flex-end; margin-bottom: 1rem; }
+.portail-haut { display: flex; justify-content: flex-end; margin-bottom: 0.5rem; }
 .lien-passer {
   background: none; border: 0; padding: 0.4rem 0;
   font: 600 var(--t-petit) var(--sans);
@@ -238,21 +250,21 @@ a.ref:hover { text-decoration: underline; }
 .masthead-titre { font-family: var(--serif); font-weight: 700; font-size: 1.5rem; letter-spacing: 0.02em; }
 .masthead-titre span { font-family: var(--sans); font-weight: 400; font-size: var(--t-petit); color: var(--encre-2); letter-spacing: 0; margin-left: 0.5rem; }
 @media (max-width: 39.99rem) { .masthead-titre span { display: block; margin: 0.3rem 0 0; } }
-.portail-entete { padding: 1.5rem 0 1.25rem; border-bottom: 1px solid var(--filet); }
-.portail-entete h1 { font-size: clamp(1.875rem, 1.3rem + 2.4vw, 2.875rem); margin-top: 0.5rem; }
-.portail-entete .chapeau { margin-top: 0.85rem; color: var(--encre-2); font-size: 1.0625rem; }
+.portail-entete { padding: 1.1rem 0 0.9rem; border-bottom: 1px solid var(--filet); }
+.portail-entete h1 { font-size: clamp(1.875rem, 1.3rem + 2.4vw, 2.75rem); margin-top: 0.4rem; }
+.portail-entete .chapeau { margin-top: 0.65rem; color: var(--encre-2); font-size: 1.0625rem; }
 .abstract { margin: 0; }
 .abstract-ligne {
   display: grid; grid-template-columns: 1fr; gap: 0.3rem;
-  padding: 1rem 0; border-bottom: 1px solid var(--filet);
+  padding: 0.8rem 0; border-bottom: 1px solid var(--filet);
 }
 .abstract-ligne dt { padding-top: 0.2rem; }
 .abstract-ligne dd { margin: 0; max-width: var(--mesure); }
 @media (min-width: 40rem) {
-  .abstract-ligne { grid-template-columns: 9.5rem 1fr; gap: 1.5rem; }
+  .abstract-ligne { grid-template-columns: 8rem 1fr; gap: 1.5rem; }
 }
 .abstract .rouge { color: var(--rouge); font-weight: 650; }
-.appel-bloc { display: grid; gap: 0.9rem; }
+.appel-bloc { display: grid; gap: 0.7rem; }
 .appel-num {
   font-family: var(--mono); font-variant-numeric: tabular-nums;
   font-size: clamp(1.75rem, 1.2rem + 2.4vw, 2.5rem);
@@ -260,7 +272,7 @@ a.ref:hover { text-decoration: underline; }
   color: var(--bleu); text-decoration: none; white-space: nowrap;
 }
 .appel-num:hover { text-decoration: underline; text-decoration-thickness: 2px; }
-.portail-actions { padding-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center; }
+.portail-actions { padding-top: 1.1rem; display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center; }
 
 /* =========================================================
    En-tête du site
@@ -290,7 +302,6 @@ a.ref:hover { text-decoration: underline; }
   font: 500 var(--t-petit) var(--sans); padding: 0.45rem 0.7rem; cursor: pointer;
 }
 .bouton-theme:hover { border-color: var(--encre-3); color: var(--encre); }
-.bouton-theme[aria-pressed="true"] { background: var(--fond-3); color: var(--encre); }
 .nav { border-top: 1px solid var(--filet); }
 .nav ul { list-style: none; display: flex; flex-wrap: wrap; gap: 0 1.25rem; padding: 0.35rem 0; }
 .nav a {
@@ -318,7 +329,10 @@ a.ref:hover { text-decoration: underline; }
 
 .heros { padding: clamp(2.25rem, 1.5rem + 3vw, 4.5rem) 0 clamp(2rem, 1.5rem + 2vw, 3rem); }
 .heros-grille { display: grid; gap: 2rem; }
-@media (min-width: 60rem) { .heros-grille { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: end; gap: 3rem; } }
+@media (min-width: 60rem) {
+  .heros-grille { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start; gap: 3rem; }
+  .heros-grille > .encart { margin-top: calc(var(--t-label) * 1.6 + 0.6rem); }
+}
 .heros h1 { margin-top: 0.6rem; }
 .heros .chapeau { margin-top: 1.1rem; font-size: 1.1875rem; color: var(--encre-2); }
 .heros .actions { margin-top: 1.6rem; }
@@ -343,7 +357,12 @@ a.ref:hover { text-decoration: underline; }
   .chiffres li:nth-child(3) { border-left: 0; padding-left: 0; }
   .chiffres li:nth-child(n+3) { border-top: 1px solid var(--filet); }
 }
-.chiffres .num { font-size: clamp(1.5rem, 1.1rem + 1.5vw, 2.125rem); font-weight: 600; color: var(--encre); line-height: 1.1; }
+.chiffres .num {
+  font-family: var(--serif); font-variant-numeric: lining-nums tabular-nums;
+  font-size: clamp(1.625rem, 1.2rem + 1.5vw, 2.25rem); font-weight: 600;
+  letter-spacing: 0; word-spacing: normal;
+  color: var(--encre); line-height: 1.1;
+}
 .chiffres .lib { font-size: var(--t-petit); color: var(--encre-2); }
 
 /* Figures */
@@ -457,6 +476,10 @@ a.ref:hover { text-decoration: underline; }
 .liste-grille { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); border-top: 1px solid var(--filet-fort); }
 .liste-grille > li { padding: 0.75rem 1rem 0.75rem 0; border-bottom: 1px solid var(--filet); }
 .professions > li { font-family: var(--serif); font-size: 1.125rem; }
+@media (max-width: 47.99rem) {
+  .liste-grille.professions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .professions > li { font-family: var(--sans); font-size: 0.9375rem; padding: 0.6rem 0.75rem 0.6rem 0; }
+}
 .items { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: 0 2rem; border-top: 1px solid var(--filet-fort); }
 .items > li { padding: 1rem 0 1.15rem; border-bottom: 1px solid var(--filet); display: grid; gap: 0.35rem; align-content: start; }
 .items h3 { font-size: var(--t-h4); }
@@ -472,8 +495,9 @@ a.ref:hover { text-decoration: underline; }
 .article-tete h1 { margin-top: 0.6rem; max-width: 22ch; }
 .article-meta { display: flex; flex-wrap: wrap; gap: 0.3rem 1.5rem; margin-top: 1.1rem; font-size: var(--t-petit); color: var(--encre-3); }
 .resume {
-  margin-top: 1.75rem; border-top: 1px solid var(--filet-fort); border-bottom: 1px solid var(--filet);
-  padding: 1rem 0 1.15rem; display: grid; gap: 0.5rem; max-width: 50rem;
+  margin-top: 1.75rem; border-top: 1px solid var(--filet-fort);
+  background: var(--fond-2);
+  padding: 1rem clamp(1rem, 0.6rem + 1.5vw, 1.5rem) 1.15rem; display: grid; gap: 0.5rem;
 }
 .resume p { font-size: 1rem; }
 .article-corps { display: grid; gap: 0; }
@@ -585,11 +609,11 @@ td.mono, th.mono { white-space: nowrap; }
     <dl class="abstract">
       <div class="abstract-ligne">
         <dt class="label">Contexte</dt>
-        <dd>Neuf professions de santé à ordre — des médecins aux biologistes — exercent sous une charge et une responsabilité permanentes, et demandent rarement de l’aide pour elles-mêmes.</dd>
+        <dd>Neuf professions de santé à ordre — des médecins aux biologistes — exercent sous une charge de travail et une responsabilité permanentes.</dd>
       </div>
       <div class="abstract-ligne">
         <dt class="label">Constat</dt>
-        <dd><span class="num">49&nbsp;%</span> des médecins français sont touchés par le burnout au cours de leur carrière<a class="ref" href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" title="Kansoun et al., Journal of Affective Disorders, 2019 — méta-analyse de 37 études, 15 183 médecins" target="_blank" rel="noopener">[1]</a>. Leur risque de décès par suicide est supérieur de <span class="num rouge">44&nbsp;%</span> à celui de la population générale<a class="ref" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" title="Dutheil et al., PLOS ONE, 2019 — méta-analyse de 25 études" target="_blank" rel="noopener">[2]</a>. Chez les jeunes médecins, <span class="num">66,2&nbsp;%</span> présentent des symptômes anxieux<a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a>.</dd>
+        <dd><span class="num">49&nbsp;%</span> des médecins français sont touchés par le burnout au cours de leur carrière<a class="ref" href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" title="Kansoun et al., Journal of Affective Disorders, 2019 — méta-analyse de 37 études, 15 183 médecins" target="_blank" rel="noopener">[1]</a>. Chez les médecins, le risque de décès par suicide est supérieur de <span class="num rouge">44&nbsp;%</span> à celui de la population générale<a class="ref" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" title="Dutheil et al., PLOS ONE, 2019 — méta-analyse de 25 études" target="_blank" rel="noopener">[2]</a>. Chez les jeunes médecins, <span class="num">66,2&nbsp;%</span> présentent des symptômes anxieux<a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a>.</dd>
       </div>
       <div class="abstract-ligne">
         <dt class="label">Intervention</dt>
@@ -623,7 +647,7 @@ td.mono, th.mono { white-space: nowrap; }
       </a>
       <div class="entete-outils">
         <a class="tel-entete" href="tel:+33608282589" aria-label="Appeler la ligne d’écoute MOTS au 06 08 28 25 89">06 08 28 25 89</a>
-        <button type="button" class="bouton-theme" id="bouton-theme" aria-pressed="false">Thème sombre</button>
+        <button type="button" class="bouton-theme" id="bouton-theme">Thème sombre</button>
       </div>
     </div>
     <nav class="nav" aria-label="Navigation principale">
@@ -799,7 +823,7 @@ td.mono, th.mono { white-space: nowrap; }
         <p class="article-meta"><span>4 études publiées</span><span>2016 – 2019</span><span>Synthèse proposée par cette démonstration</span></p>
         <div class="resume">
           <p class="label">Résumé</p>
-          <p>Deux méta-analyses et une enquête nationale établissent l’ampleur de la souffrance des médecins en France et l’excès de mortalité par suicide qui l’accompagne<a class="ref" href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" title="Kansoun et al., Journal of Affective Disorders, 2019 — méta-analyse de 37 études, 15 183 médecins" target="_blank" rel="noopener">[1]</a><a class="ref" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" title="Dutheil et al., PLOS ONE, 2019 — méta-analyse de 25 études" target="_blank" rel="noopener">[2]</a><a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a>. Une revue systématique publiée dans <cite>The Lancet</cite> montre que les interventions individuelles et organisationnelles réduisent le burnout de façon cliniquement significative<a class="ref" href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" title="West, Dyrbye, Erwin &amp; Shanafelt, The Lancet, 2016 — revue systématique et méta-analyse" target="_blank" rel="noopener">[4]</a>. Le dispositif MOTS — écoute et accompagnement par des pairs formés, gratuits et confidentiels — s’inscrit dans cette logique.</p>
+          <p>Deux méta-analyses et une enquête nationale établissent l’ampleur de la souffrance des médecins en France<a class="ref" href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" title="Kansoun et al., Journal of Affective Disorders, 2019 — méta-analyse de 37 études, 15 183 médecins" target="_blank" rel="noopener">[1]</a> <a class="ref" href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" title="Enquête nationale santé mentale, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈ 22 000 répondants" target="_blank" rel="noopener">[3]</a> et un excès de mortalité par suicide chez les médecins par rapport à la population générale<a class="ref" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" title="Dutheil et al., PLOS ONE, 2019 — méta-analyse de 25 études" target="_blank" rel="noopener">[2]</a>. Une revue systématique publiée dans <cite>The Lancet</cite> montre que les interventions individuelles et organisationnelles réduisent le burnout de façon cliniquement significative<a class="ref" href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" title="West, Dyrbye, Erwin &amp; Shanafelt, The Lancet, 2016 — revue systématique et méta-analyse" target="_blank" rel="noopener">[4]</a>. Le dispositif MOTS — écoute et accompagnement par des pairs formés, gratuits et confidentiels — s’inscrit dans cette logique.</p>
         </div>
       </header>
 
@@ -845,7 +869,7 @@ td.mono, th.mono { white-space: nowrap; }
         <section class="article-section" aria-labelledby="s2">
           <h2 id="s2"><span class="sec-num">2.</span>Mortalité par suicide&nbsp;: un excès de 44&nbsp;%</h2>
           <p>Une méta-analyse de 25 études publiée dans <cite>PLOS ONE</cite> établit un ratio standardisé de mortalité par suicide de <span class="donnee donnee--alerte">1,44</span> chez les médecins&nbsp;: leur risque de décès par suicide est supérieur de 44&nbsp;% à celui de la population générale<a class="ref" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" title="Dutheil et al., PLOS ONE, 2019 — méta-analyse de 25 études" target="_blank" rel="noopener">[2]</a>.</p>
-          <p>Ce chiffre ne décrit pas une fatalité. Il décrit un écart — et un écart se réduit lorsque la souffrance est repérée et accompagnée tôt.</p>
+          <p>Ce chiffre ne décrit pas une fatalité. Des interventions individuelles et organisationnelles réduisent le burnout de façon cliniquement significative<a class="ref" href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" title="West, Dyrbye, Erwin &amp; Shanafelt, The Lancet, 2016 — revue systématique et méta-analyse" target="_blank" rel="noopener">[4]</a>&nbsp;: la souffrance se repère et s’accompagne.</p>
           <figure class="fig">
             <figcaption class="fig-titre"><span class="fig-num">Figure 2</span>Ratio standardisé de mortalité (SMR) par suicide, médecins vs population générale<a class="ref" href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" title="Dutheil et al., PLOS ONE, 2019 — méta-analyse de 25 études" target="_blank" rel="noopener">[2]</a>. Trait pointillé&nbsp;: référence 1,00.</figcaption>
             <div class="jauge">
@@ -1267,7 +1291,7 @@ td.mono, th.mono { white-space: nowrap; }
       <p>Aucune information publiée ici ne saurait engager l’association. Pour toute démarche réelle, reportez-vous à son site officiel&nbsp;: <a href="https://www.association-mots.org" target="_blank" rel="noopener">association-mots.org</a>.</p>
       <h2>Contenus et propriété intellectuelle</h2>
       <p>Les textes de cette démonstration ont été rédigés à partir d’informations publiquement disponibles, sans reproduction du site officiel de l’association. Le nom, l’identité et les contenus officiels de l’Association MOTS appartiennent à l’Association MOTS. Toute référence les concernant renvoie à son site officiel.</p>
-      <p>Les données chiffrées proviennent des quatre publications listées sur la page <a href="/science">La science</a>, chacune liée à sa source.</p>
+      <p>Les données scientifiques proviennent des quatre publications listées sur la page <a href="/science">La science</a>, chacune liée à sa source&nbsp;; les chiffres de l’association reprennent les informations publiques de l’Association MOTS.</p>
       <h2>Données personnelles</h2>
       <p>Ce site ne collecte aucune donnée personnelle&nbsp;: pas de compte, pas de mesure d’audience, pas de profilage. Aucun cookie n’est déposé et aucun traceur tiers n’est embarqué. Aucune ressource externe (police, image, script) n’est chargée.</p>
       <p>Le formulaire de contact est volontairement désactivé&nbsp;: rien de ce que vous pourriez y saisir n’est transmis ni conservé. Seule votre préférence de thème (clair ou sombre) peut être mémorisée localement dans votre navigateur.</p>
@@ -1336,7 +1360,7 @@ td.mono, th.mono { white-space: nowrap; }
     if (t) return t === 'dark'
     return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
   }
-  function majTheme () { if (boutonTheme) boutonTheme.setAttribute('aria-pressed', String(themeSombre())) }
+  function majTheme () { if (boutonTheme) boutonTheme.textContent = themeSombre() ? 'Thème clair' : 'Thème sombre' }
   if (boutonTheme) boutonTheme.addEventListener('click', function () {
     var suivant = themeSombre() ? 'light' : 'dark'
     racine.setAttribute('data-theme', suivant)
@@ -1344,6 +1368,7 @@ td.mono, th.mono { white-space: nowrap; }
     majTheme()
   })
   majTheme()
+  try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', majTheme) } catch (e) {}
 
   // Portail
   var portail = document.getElementById('portail')

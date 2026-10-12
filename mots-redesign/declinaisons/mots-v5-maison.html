@@ -17,6 +17,7 @@
   --encre-3: #6a6152;
   --or: #b08d43;
   --or-texte: #7a5b1f;
+  --or-appel: #8a6516;
   --filet: rgba(176, 141, 67, .62);
   --filet-doux: rgba(176, 141, 67, .32);
   --trait: rgba(31, 27, 22, .14);
@@ -56,6 +57,7 @@
     --encre-3: #a99f8c;
     --or: #c4a35e;
     --or-texte: #d9ba76;
+  --or-appel: #c4a35e;
     --filet: rgba(196, 163, 94, .6);
     --filet-doux: rgba(196, 163, 94, .3);
     --trait: rgba(236, 228, 211, .16);
@@ -78,6 +80,7 @@
   --encre-3: #a99f8c;
   --or: #c4a35e;
   --or-texte: #d9ba76;
+  --or-appel: #c4a35e;
   --filet: rgba(196, 163, 94, .6);
   --filet-doux: rgba(196, 163, 94, .3);
   --trait: rgba(236, 228, 211, .16);
@@ -95,7 +98,7 @@
 
 /* ---------- Base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--hb) + 1rem); scroll-padding-bottom: 1rem; }
 body {
   margin: 0;
   background: var(--fond);
@@ -125,6 +128,13 @@ svg { display: block; }
   box-shadow: 0 0 0 3px var(--focus-halo);
 }
 [tabindex="-1"]:focus { outline: none; box-shadow: none; }
+/* Liens dans le texte courant : soulignement or épaissi + anneau serré, sans halo (ne mord pas sur les mots voisins) */
+.portail-recours a:focus-visible, .sortie a:focus-visible, .source a:focus-visible,
+.urgence-pied a:focus-visible, .notes a:focus-visible, .entete-tel a:focus-visible,
+.appel a:focus-visible, .appel-texte a:focus-visible, .citation-mention a:focus-visible {
+  outline: 1.5px solid var(--focus); outline-offset: 1px; box-shadow: none;
+  text-decoration-line: underline; text-decoration-color: var(--or); text-decoration-thickness: 3px;
+}
 [id] { scroll-margin-top: calc(var(--hb) + 1.25rem); }
 .num { font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; }
 .visuellement-cache {
@@ -277,28 +287,30 @@ main { display: block; }
 .entete-page .fleuron { margin-top: 2rem; }
 
 /* ---------- Héro accueil ---------- */
-.hero { display: grid; gap: clamp(2.25rem, 5vw, 4.5rem); align-items: center; padding-bottom: clamp(3rem, 6vw, 4.5rem); }
-@media (min-width: 60rem) { .hero { grid-template-columns: 1.4fr 1fr; } }
-.hero h1 { max-width: 16ch; }
-.hero .chapo { margin-top: 1.4rem; }
-.hero-note { margin-top: 1.1rem; font-size: var(--t-petit); color: var(--encre-3); font-style: italic; }
-.carte-appel { border: 1px solid var(--or); padding: 7px; background: var(--papier); }
+.hero { display: grid; gap: clamp(2.25rem, 5vw, 3.5rem); justify-items: center; text-align: center; padding-bottom: clamp(3rem, 6vw, 4.5rem); }
+.hero-texte { display: grid; justify-items: center; }
+.hero h1 { max-width: 21ch; margin-inline: auto; }
+.hero .chapo { margin: 1.25rem auto 0; max-width: 44rem; }
+.hero .actions { justify-content: center; margin-top: 1.6rem; }
+.hero-note { margin: 1rem auto 0; font-size: var(--t-petit); color: var(--encre-3); font-style: italic; }
+.carte-appel { border: 1px solid var(--or); padding: 7px; background: var(--papier); width: 100%; max-width: 30rem; }
 .carte-appel > div { border: 1px solid var(--filet-doux); padding: clamp(1.5rem, 4vw, 2.25rem) 1.25rem; text-align: center; display: grid; gap: .85rem; justify-items: center; }
 .carte-appel p { margin: 0; }
 .carte-appel .mentions-ligne { font-size: var(--t-petit); color: var(--encre-2); }
 
 /* ---------- Registre (chiffres associatifs) ---------- */
-.registre { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-block: 1px solid var(--filet); }
-.registre li { text-align: center; padding: 1.4rem .5rem; display: grid; gap: .3rem; align-content: start; }
-.registre li:nth-child(n+3) { border-top: 1px solid var(--filet-doux); }
-.registre li:nth-child(2n) { border-left: 1px solid var(--filet-doux); }
+.registre { list-style: none; display: grid; grid-template-columns: minmax(0, 1fr); border-block: 1px solid var(--filet); padding-block: .4rem; }
+.registre li { position: relative; text-align: center; padding: 1.1rem .5rem; display: grid; gap: .25rem; align-content: start; }
+.registre li + li::before {
+  content: ""; position: absolute; top: 0; left: 50%; width: .42rem; height: .42rem;
+  border: 1px solid var(--or); background: var(--fond); transform: translate(-50%, -50%) rotate(45deg);
+}
 @media (min-width: 48rem) {
-  .registre { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .registre li:nth-child(n+3) { border-top: 0; }
-  .registre li + li { border-left: 1px solid var(--filet-doux); }
+  .registre { grid-template-columns: repeat(4, minmax(0, 1fr)); padding-block: .6rem; }
+  .registre li + li::before { top: 50%; left: 0; }
 }
 .registre .valeur { font-size: clamp(2rem, 1.5rem + 2vw, 2.75rem); line-height: 1.05; font-variant-numeric: lining-nums tabular-nums; }
-.registre .libelle { font-variant-caps: all-small-caps; letter-spacing: .14em; color: var(--encre-2); font-size: 1rem; }
+.registre .libelle { font-variant-caps: all-small-caps; letter-spacing: .12em; color: var(--encre-2); font-size: 1rem; text-wrap: balance; }
 
 /* ---------- Science : citations gravées ---------- */
 .gravures { list-style: none; display: grid; gap: 0; }
@@ -312,12 +324,13 @@ main { display: block; }
   .gravure + .gravure { border-top: 0; border-left: 1px solid var(--filet-doux); }
 }
 .chiffre { font-size: var(--t-chiffre); line-height: .95; font-variant-numeric: lining-nums tabular-nums; letter-spacing: -.01em; white-space: nowrap; margin: 0; }
-.appel { font-size: .28em; vertical-align: super; line-height: 0; margin-left: .15em; letter-spacing: 0; }
-.appel a { color: var(--or-texte); text-decoration: none; padding: 0 .15em; }
+.appel { font-size: .36em; vertical-align: .9em; line-height: 0; margin-left: .12em; letter-spacing: 0; }
+.appel a { color: var(--or-appel); text-decoration: none; padding: 0 .12em; }
 .appel a:hover { text-decoration: underline; }
 .appel-texte { font-size: .7em; vertical-align: super; line-height: 0; }
-.appel-texte a { color: var(--or-texte); text-decoration: none; padding: 0 .1em; }
+.appel-texte a { color: var(--or-appel); text-decoration: none; padding: 0 .1em; }
 .gravure p:not(.chiffre) { color: var(--encre-2); }
+.gravure .chiffre { font-size: clamp(3.25rem, 2rem + 4.2vw, 5.25rem); }
 .sortie {
   margin: 2.25rem auto 0; max-width: 46rem; text-align: center; font-style: italic; color: var(--encre-2);
   padding: 1rem 0; border-block: 1px solid var(--filet-doux);
@@ -325,9 +338,9 @@ main { display: block; }
 .sortie a { font-style: normal; white-space: nowrap; }
 .citation { margin: clamp(2.5rem, 5vw, 3.5rem) auto 0; max-width: 44rem; text-align: center; }
 .citation .surtitre { margin-bottom: 1.1rem; }
-.citation blockquote { margin: 0; font-size: clamp(1.35rem, 1.1rem + 1vw, 1.75rem); line-height: 1.4; font-style: italic; text-wrap: balance; }
-.citation blockquote p { max-width: none; }
-.guillemet { color: var(--or); font-style: normal; }
+.citation .citation-titre { margin: 0 auto; font-size: var(--t-titre); line-height: 1.2; text-wrap: balance; }
+.citation .citation-texte { margin: 1rem auto 0; font-size: clamp(1.25rem, 1.05rem + .9vw, 1.6rem); line-height: 1.42; font-style: italic; color: var(--encre-2); text-wrap: balance; max-width: 40rem; }
+.citation .citation-mention { margin: 1rem auto 0; font-size: var(--t-petit); color: var(--encre-3); }
 .notes {
   margin-top: clamp(2.5rem, 5vw, 3.5rem); padding: 1.25rem 0 0 1.4rem;
   border-top: 1px solid var(--filet); font-size: var(--t-petit); color: var(--encre-2);
@@ -340,23 +353,34 @@ main { display: block; }
 .renvoi p { margin-inline: auto; }
 
 /* ---------- Planches (/science) ---------- */
-.planche { display: grid; gap: 1.25rem 3.5rem; padding-block: clamp(2.5rem, 5vw, 3.75rem); }
+.planche {
+  display: grid; gap: 1.25rem; justify-items: center; text-align: center;
+  max-width: 46rem; margin-inline: auto; padding-block: clamp(2.5rem, 5vw, 3.75rem);
+}
 .planche + .planche { border-top: 1px solid var(--trait); }
-@media (min-width: 60rem) { .planche { grid-template-columns: minmax(0, 22rem) minmax(0, 1fr); } }
-.planche-tete { display: grid; gap: .75rem; align-content: start; }
+.planche p { margin-inline: auto; }
+.planche-tete { display: grid; gap: .75rem; justify-items: center; }
 .planche-num { font-variant-caps: all-small-caps; letter-spacing: .22em; color: var(--or-texte); font-size: 1.1rem; }
-.planche-corps { display: grid; gap: 1rem; align-content: start; }
+.planche-corps { display: grid; gap: 1rem; justify-items: center; width: 100%; }
 .planche-corps h2 { font-size: var(--t-intertitre); }
 .planche-corps .enonce { font-size: var(--t-chapo); }
-.detail { list-style: none; display: grid; gap: .35rem; color: var(--encre-2); }
+.detail { list-style: none; display: grid; gap: .35rem; color: var(--encre-2); width: 100%; max-width: 30rem; text-align: left; }
 .detail li { display: flex; gap: .9rem; align-items: baseline; border-bottom: 1px solid var(--trait); padding: .4rem 0; max-width: var(--mesure); }
 .detail .num { min-width: 4.2rem; color: var(--encre); font-size: 1.15rem; }
-.methode { font-size: var(--t-petit); color: var(--encre-2); display: flex; flex-wrap: wrap; gap: .25rem .8rem; align-items: baseline; }
+.methode { font-size: var(--t-petit); color: var(--encre-2); display: flex; flex-wrap: wrap; justify-content: center; gap: .25rem .8rem; align-items: baseline; }
 .methode b { font-weight: 400; font-size: var(--t-label); text-transform: uppercase; letter-spacing: .26em; color: var(--or-texte); }
 .source { font-size: var(--t-petit); color: var(--encre-2); }
-.planche-filet { border: 0; border-top: 1px solid var(--or); width: 4rem; margin: .25rem 0; }
-.planche .citation-planche { margin: 0; font-size: clamp(1.4rem, 1.1rem + 1.2vw, 1.9rem); font-style: italic; line-height: 1.35; }
-.planche .citation-planche p { max-width: 24ch; }
+.planche-filet { border: 0; border-top: 1px solid var(--or); width: 4rem; margin: .25rem auto; }
+/* Citation gravée (étude The Lancet, sans chiffre) : grands guillemets or suspendus */
+.guillemets { position: relative; font-style: italic; text-wrap: balance;padding-inline: clamp(2rem, 1.4rem + 2.6vw, 3.25rem); }
+.guillemets::before, .guillemets::after {
+  position: absolute; font-style: normal; font-size: clamp(2.75rem, 2.2rem + 2.2vw, 3.9rem);
+  line-height: 1; color: var(--or); pointer-events: none;
+}
+.guillemets::before { content: "\00AB"; content: "\00AB" / ""; left: 0; top: -.14em; }
+.guillemets::after { content: "\00BB"; content: "\00BB" / ""; right: 0; bottom: -.1em; }
+.citation .citation-texte.guillemets { max-width: 36rem; }
+.planche .intitule-planche { margin: 0 auto; font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.4rem); line-height: 1.2; text-wrap: balance; max-width: 18ch; }
 
 /* ---------- Parcours I / II / III ---------- */
 .parcours { list-style: none; display: grid; gap: 2.5rem 2.5rem; }
@@ -536,7 +560,7 @@ main { display: block; }
 <section class="vue" data-route="/" aria-labelledby="t-accueil">
   <div class="cadre">
     <div class="hero">
-      <div>
+      <div class="hero-texte">
         <p class="surtitre">Écoute confraternelle · depuis 2010</p>
         <h1 id="t-accueil">Vous soignez les autres. Qui prend soin de vous&nbsp;?</h1>
         <p class="chapo">Depuis 2010, des médecins spécifiquement formés écoutent et accompagnent les professionnels de santé qui traversent une période difficile — épuisement, santé, organisation du travail. Gratuitement, en toute confidentialité.</p>
@@ -586,18 +610,18 @@ main { display: block; }
           <p>de risque de décès par suicide chez les médecins, par rapport à la population générale.</p>
         </li>
         <li class="gravure">
-          <p class="chiffre num">66&nbsp;%<sup class="appel"><a href="#n-a3" aria-label="Note 3">3</a></sup></p>
+          <p class="chiffre num">66,2&nbsp;%<sup class="appel"><a href="#n-a3" aria-label="Note 3">3</a></sup></p>
           <p>des jeunes médecins présentent des symptômes anxieux&nbsp;; 27,7&nbsp;% des symptômes dépressifs, et 23,7&nbsp;% ont déjà eu des idées suicidaires.</p>
         </li>
       </ul>
       <p class="sortie">Si ces chiffres résonnent en vous, parlez-en à un pair&nbsp;: <a class="num" href="tel:+33608282589">06 08 28 25 89</a>, 7&nbsp;j/7. En cas de pensées suicidaires, le <a href="tel:3114">3114</a> répond 24&nbsp;h/24.</p>
 
-      <figure class="citation">
-        <figcaption class="surtitre">L’accompagnement fonctionne</figcaption>
-        <blockquote>
-          <p><span class="guillemet">«&nbsp;</span>Les interventions individuelles comme organisationnelles produisent des réductions cliniquement significatives du burnout des médecins.<span class="guillemet">&nbsp;»</span><sup class="appel-texte"><a href="#n-a4" aria-label="Note 4">4</a></sup></p>
-        </blockquote>
-      </figure>
+      <div class="citation">
+        <p class="surtitre">La bonne nouvelle</p>
+        <p class="citation-titre">L’accompagnement fonctionne.</p>
+        <p class="citation-texte guillemets">Les interventions individuelles comme organisationnelles produisent des réductions cliniquement significatives du burnout des médecins.<sup class="appel-texte"><a href="#n-a4" aria-label="Note 4">4</a></sup></p>
+        <p class="citation-mention">Conclusion de la méta-analyse publiée dans <cite>The Lancet</cite>, résumée en français.</p>
+      </div>
 
       <ol class="notes" aria-label="Sources">
         <li id="n-a1"><cite>Kansoun et al., Journal of Affective Disorders</cite>, 2019 — méta-analyse de 37 études, 15&nbsp;183 médecins. <a href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" target="_blank" rel="noopener">ScienceDirect</a></li>
@@ -709,7 +733,7 @@ main { display: block; }
         <p class="chiffre num">49&nbsp;%</p>
       </div>
       <div class="planche-corps">
-        <h2 id="et1">Le burnout touche un médecin français sur deux</h2>
+        <h2 id="et1">Un médecin français sur deux traverse un burnout au cours de sa carrière</h2>
         <p class="enonce">49&nbsp;% des médecins français sont touchés par le burnout au cours de leur carrière, dont 5&nbsp;% sous une forme sévère.</p>
         <p class="methode"><b>Méthode</b><span>Méta-analyse · 37 études · <span class="num">15&nbsp;183</span> médecins</span></p>
         <p class="source"><cite>Kansoun et al., Journal of Affective Disorders</cite>, 2019.</p>
@@ -758,13 +782,11 @@ main { display: block; }
     <article class="planche" aria-labelledby="et4">
       <div class="planche-tete">
         <p class="planche-num">Étude IV</p>
-        <blockquote class="citation-planche">
-          <p><span class="guillemet">«&nbsp;</span>L’accompagnement fonctionne.<span class="guillemet">&nbsp;»</span></p>
-        </blockquote>
+        <p class="intitule-planche">L’accompagnement fonctionne</p>
       </div>
       <div class="planche-corps">
         <h2 id="et4">Agir réduit le burnout</h2>
-        <p class="enonce">Les interventions individuelles comme organisationnelles produisent des réductions cliniquement significatives du burnout des médecins.</p>
+        <p class="enonce guillemets">Les interventions individuelles comme organisationnelles produisent des réductions cliniquement significatives du burnout des médecins.</p>
         <p class="methode"><b>Méthode</b><span>Revue systématique et méta-analyse</span></p>
         <p class="source"><cite>West, Dyrbye, Erwin &amp; Shanafelt, The Lancet</cite>, 2016. Conclusion résumée en français.</p>
         <hr class="planche-filet">
@@ -1137,7 +1159,7 @@ main { display: block; }
         <h3>Ce qui appartient à l’association</h3>
         <p>Le nom, l’identité et les contenus officiels de l’Association MOTS appartiennent à l’Association MOTS. Toute référence les concernant renvoie à <a href="https://www.association-mots.org" target="_blank" rel="noopener">son site officiel</a>.</p>
         <h3>Sources scientifiques</h3>
-        <p>Les chiffres cités proviennent de quatre publications, référencées et liées sur la page <a href="/science">La science</a>. Ils sont reproduits tels que publiés.</p>
+        <p>Les chiffres cités proviennent de quatre publications, référencées et liées sur la page <a href="/science">La science</a>. Ils sont repris de ces publications (certains arrondis ou résumés en français).</p>
       </section>
       <section>
         <h2>Données personnelles</h2>
