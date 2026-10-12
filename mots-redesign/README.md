@@ -51,6 +51,7 @@ ne change pas le rendu : retours à la ligne, commentaires, noms de variables lo
 - **Kit d'intégration léger (WKWebView)** : `claude-macos-app/MOTS-integration/`.
 - **Application web avancée « MOTS Companion »** (Next.js + Recharts + framer-motion, générée et testée par v0) : https://v0.app/bthevenot-bp/chat/mots-companion-application-avancee-mj2vsNQWnUW
 - **Hub des directions** (artifact Claude) : https://claude.ai/artifact/SDKLzPMze23DZuAcf5QvPc
+- **Déclinaisons en ligne** (artifacts Claude, privés) : [Édition Nuit](https://claude.ai/artifact/Qx9cJCu1PT4b4WQHgaLrYZ) · [À hauteur d'humain](https://claude.ai/artifact/SZY2K1AJq47HZzekmpx3f4) · [Evidence](https://claude.ai/artifact/8mmgq1Z7gxwXxcXhbHjbyZ) · [Maison](https://claude.ai/artifact/7GMCoyxyCKaNCoPbDkJ2yV)
 
 ## Faits et sources scientifiques (vérifiés)
 
