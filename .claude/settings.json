@@ -10,6 +10,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/vive-memoire-stop.sh",
+            "timeout": 30
+          }
+        ]
+      }
     ]
   },
   "mcpServers": {
