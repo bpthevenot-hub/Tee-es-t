@@ -23,7 +23,7 @@ from pathlib import Path
 from config import paths
 
 try:
-    from google.auth.exceptions import RefreshError
+    from google.auth.exceptions import GoogleAuthError, RefreshError
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
@@ -146,7 +146,10 @@ def _first_valid_credentials(token_path, problems):
         if creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
-            except RefreshError as e:  # revoked, or a 7-day "Testing" OAuth app
+            # GoogleAuthError covers both RefreshError (revoked / 7-day "Testing"
+            # OAuth app) and TransportError (DNS, timeout, connection). Either way,
+            # fall through to the next source instead of escaping the loop.
+            except GoogleAuthError as e:
                 problems.append(f"{label}: refresh failed ({e.args[0] if e.args else e})")
                 continue
             if persist:

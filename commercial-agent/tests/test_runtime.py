@@ -324,6 +324,25 @@ def test_revoked_env_token_falls_back_to_valid_file(gmail, clean_env, tmp_path):
     assert gmail._get_gmail_service() is service
 
 
+def test_transport_error_env_token_falls_back_to_valid_file(gmail, clean_env, tmp_path):
+    # A network failure (not an OAuth RefreshError) refreshing GMAIL_TOKEN_JSON
+    # must still fall through to a valid token file rather than escape the loop.
+    from google.auth.exceptions import TransportError
+
+    stale = {**VALID_TOKEN, "expiry": "2000-01-01T00:00:00Z"}
+    clean_env.setenv("GMAIL_TOKEN_JSON", json.dumps(stale))
+    (tmp_path / "token.json").write_text(json.dumps(VALID_TOKEN))
+
+    def transport_fail(self, request):
+        raise TransportError("Failed to resolve 'oauth2.googleapis.com'")
+
+    clean_env.setattr(gmail.Credentials, "refresh", transport_fail)
+    service = object()
+    clean_env.setattr(gmail, "build", lambda *args, **kwargs: service)
+
+    assert gmail._get_gmail_service() is service
+
+
 def test_refreshed_token_survives_read_only_disk(gmail, clean_env, tmp_path):
     from datetime import datetime
 
