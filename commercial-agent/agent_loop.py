@@ -137,7 +137,15 @@ def run_agent_loop(
     The final text returned when the model signals `stop_reason == "end_turn"`,
     or a short error message on API / iteration-cap failure.
     """
-    client = client or anthropic.Anthropic()
+    if client is None:
+        try:
+            client = anthropic.Anthropic()
+        # Some SDK versions validate credentials at construction rather than at
+        # request time; surface that as a failure result (not a crash) so cron/CI
+        # callers like autonomous.py still write their diagnostic report.
+        except (anthropic.AnthropicError, TypeError) as e:
+            log.error(f"  Client init failed — check ANTHROPIC_API_KEY: {e}")
+            return f"API Error (client): {e}"
     tools = list(tools)
     system = _cached_system(system_prompt)
     messages: list[dict] = [{"role": "user", "content": user_prompt}]
