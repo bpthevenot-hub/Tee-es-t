@@ -18,14 +18,27 @@ try:
 except ImportError:
     requests = None
 
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
+# Same .env as autonomous.py, so both agree on AGENT_DATA_DIR.
+if load_dotenv is not None:
+    load_dotenv()
+
+from config import paths
 
 logger = logging.getLogger("update_status")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s update_status: %(message)s")
 
 
-STATUS_FILE = os.path.join(os.path.dirname(__file__), "..", "docs", "status.json")
-LOG_FILE = os.path.join(os.path.dirname(__file__), "agent.log")
-LIVRABLES_DIR = os.path.join(os.path.dirname(__file__), "livrables")
+# Read from where autonomous.py writes them (project root or $AGENT_DATA_DIR).
+# The status file keeps its historical default, ../docs/status.json (the site
+# root of the Tee-es-t monorepo); set AGENT_STATUS_FILE to publish elsewhere.
+STATUS_FILE = str(paths.status_file())
+LOG_FILE = str(paths.log_file())
+LIVRABLES_DIR = str(paths.livrables_dir())
 HUBSPOT_BASE = "https://api.hubapi.com"
 
 

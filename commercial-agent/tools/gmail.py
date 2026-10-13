@@ -1,12 +1,29 @@
-"""Gmail tools for the commercial agent."""
+"""Gmail tools for the commercial agent.
+
+Credentials are looked up in this order:
+
+1. ``GMAIL_TOKEN_JSON`` — content of an authorized-user token (CI, Railway, Render).
+2. The token file written by ``python setup_gmail.py`` (``config/gmail_token.json``
+   in the project, or ``$GMAIL_TOKEN_PATH``) — whatever the working directory.
+
+Expired tokens are refreshed with their refresh token. The browser consent flow
+only starts in an interactive terminal: in cron, CI or cloud runs it would wait
+for a browser that never comes until the job is killed, so a missing or unusable
+token is reported as a tool error instead.
+"""
 
 import os
+import sys
 import json
 import base64
+import logging
 from email.mime.text import MIMEText
 from pathlib import Path
 
+from config import paths
+
 try:
+    from google.auth.exceptions import RefreshError
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     from google_auth_oauthlib.flow import InstalledAppFlow
@@ -15,12 +32,80 @@ try:
 except ImportError:
     GMAIL_AVAILABLE = False
 
+log = logging.getLogger("commercial-agent")
+
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.compose",
     "https://www.googleapis.com/auth/gmail.readonly",
 ]
 
+SETUP_HINT = (
+    "Run 'python setup_gmail.py' on a machine with a browser, then provide the "
+    "resulting token as GMAIL_TOKEN_JSON or as the token file."
+)
+
+# Upper bound on waiting for the browser consent, in case a terminal is
+# attached but nobody is there (docker -t, tmux, script).
+CONSENT_TIMEOUT_SECONDS = 300
+
+# Malformed token data surfaces as one of these, depending on what is wrong.
+TOKEN_DATA_ERRORS = (ValueError, TypeError, AttributeError)
+
 _service = None
+
+
+def _is_interactive() -> bool:
+    """True when someone can complete the browser consent flow in this run."""
+    if os.getenv("CI", "").strip().lower() in ("1", "true", "yes"):
+        return False
+    try:
+        return sys.stdin is not None and sys.stdin.isatty()
+    except (AttributeError, ValueError):  # replaced or closed stdin
+        return False
+
+
+def _write_private(path: Path, content: str) -> None:
+    """Write a secret file readable by the current user only."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(content)
+    os.chmod(path, 0o600)
+
+
+def _creds_from_env(token_json: str):
+    """Parse GMAIL_TOKEN_JSON. Returns (credentials, None) or (None, problem)."""
+    try:
+        info = json.loads(token_json)
+    except json.JSONDecodeError:
+        return None, "not valid JSON: empty, truncated or a placeholder secret"
+    if not isinstance(info, dict):
+        return None, "not a JSON object"
+    try:
+        return Credentials.from_authorized_user_info(info, SCOPES), None
+    except TOKEN_DATA_ERRORS as e:
+        return None, f"not an authorized-user token: {e}"
+
+
+def _run_consent_flow():
+    """Browser consent flow — only called from an interactive terminal."""
+    credentials_path = paths.gmail_credentials_path()
+    credentials_json = os.getenv("GMAIL_CREDENTIALS_JSON", "").strip()
+
+    if credentials_path.exists():
+        flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
+    elif credentials_json:
+        try:
+            client_config = json.loads(credentials_json)
+        except json.JSONDecodeError:
+            raise RuntimeError("GMAIL_CREDENTIALS_JSON is not valid JSON.") from None
+        flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
+    else:
+        raise RuntimeError(
+            f"Gmail not configured: no OAuth client in {credentials_path} or "
+            f"GMAIL_CREDENTIALS_JSON. {SETUP_HINT}"
+        )
+    return flow.run_local_server(port=0, timeout_seconds=CONSENT_TIMEOUT_SECONDS)
 
 
 def _get_gmail_service():
@@ -30,46 +115,55 @@ def _get_gmail_service():
         return _service
 
     if not GMAIL_AVAILABLE:
-        raise RuntimeError("Gmail dependencies not installed. Run: pip install google-auth google-auth-oauthlib google-api-python-client")
+        raise RuntimeError("Gmail dependencies not installed. Run: pip install -r requirements.txt")
 
+    token_path = paths.gmail_token_path()
     creds = None
-    token_path = Path("./config/gmail_token.json")
+    from_env = False
+    problems = []
 
-    # 1. Try loading token from env var (for Railway/serverless)
-    token_json = os.getenv("GMAIL_TOKEN_JSON")
+    # 1. Token from env var (CI, Railway, Render). The env var stays the source
+    #    of truth, so it is never copied to disk.
+    token_json = os.getenv("GMAIL_TOKEN_JSON", "").strip()
     if token_json:
-        creds = Credentials.from_authorized_user_info(json.loads(token_json), SCOPES)
+        creds, problem = _creds_from_env(token_json)
+        if problem:
+            problems.append(f"GMAIL_TOKEN_JSON: {problem}")
+        from_env = creds is not None
 
-    # 2. Try loading token from file
-    if not creds and token_path.exists():
-        creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+    # 2. Token file written by setup_gmail.py
+    if creds is None and token_path.exists():
+        try:
+            creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+        except TOKEN_DATA_ERRORS as e:  # corrupt or truncated file
+            problems.append(f"{token_path.name}: unreadable token ({e})")
 
-    # 3. Refresh if expired
+    # 3. Refresh if expired, keeping the token file up to date
     if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
+        try:
+            creds.refresh(Request())
+        except RefreshError as e:  # revoked, or a 7-day "Testing" OAuth app
+            problems.append(f"token refresh failed ({e.args[0] if e.args else e})")
+            creds = None
+        else:
+            if not from_env:
+                try:
+                    _write_private(token_path, creds.to_json())
+                except OSError as e:  # read-only checkout: keep the token in memory
+                    log.warning(f"Could not save the refreshed Gmail token: {e}")
 
-    # 4. If no valid token, try OAuth flow (only works locally with browser)
+    # 4. No usable token: browser consent, but never in unattended runs
     if not creds or not creds.valid:
-        credentials_json = os.getenv("GMAIL_CREDENTIALS_JSON")
-        credentials_path = Path(os.getenv("GMAIL_CREDENTIALS_PATH", "./config/gmail_credentials.json"))
-
-        if credentials_json and not credentials_path.exists():
-            credentials_path = Path("./config/gmail_credentials.json")
-            credentials_path.parent.mkdir(parents=True, exist_ok=True)
-            credentials_path.write_text(credentials_json)
-
-        if not credentials_path.exists():
+        detail = f" ({'; '.join(problems)})" if problems else ""
+        if not _is_interactive():
             raise RuntimeError(
-                "Gmail not configured. Run 'python setup_gmail.py' on your Mac first, "
-                "then add GMAIL_TOKEN_JSON to Railway env vars."
+                f"Gmail is not authorized for unattended runs: no valid token in "
+                f"GMAIL_TOKEN_JSON or {token_path}{detail}. {SETUP_HINT}"
             )
-
-        flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
-        creds = flow.run_local_server(port=0)
-
-    # Save token locally
-    token_path.parent.mkdir(parents=True, exist_ok=True)
-    token_path.write_text(creds.to_json())
+        if problems:
+            log.warning(f"Gmail token unusable, starting browser consent{detail}")
+        creds = _run_consent_flow()
+        _write_private(token_path, creds.to_json())
 
     _service = build("gmail", "v1", credentials=creds)
     return _service

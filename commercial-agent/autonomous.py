@@ -5,30 +5,46 @@ This script performs a full morning routine:
 2. Check HubSpot tasks due today
 3. Follow up on stale prospects
 4. Log activity summary
+
+agent.log and reports/ live in the project root, or in $AGENT_DATA_DIR when
+set — never in whatever directory the script happens to be launched from.
 """
 
-import os
 import logging
+import sys
 from datetime import datetime
 
 from dotenv import load_dotenv
 
-from config.routines import ROUTINES
-from agent_loop import run_agent_loop
-from config.system_prompt import get_system_prompt
-from tools import ALL_TOOLS, execute_tool
-
+# Load .env before importing modules that resolve settings at import time.
 load_dotenv()
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("agent.log", encoding="utf-8"),
-    ],
-)
+from agent_loop import run_agent_loop  # noqa: E402
+from config import paths  # noqa: E402
+from config.routines import ROUTINES  # noqa: E402
+from config.system_prompt import get_system_prompt  # noqa: E402
+from tools import ALL_TOOLS, execute_tool  # noqa: E402
+
 log = logging.getLogger("commercial-agent")
+
+# The shared loop reports failures as text rather than exceptions.
+FAILURE_PREFIXES = ("API Error", "Error:", "Agent stopped:")
+
+
+def _configure_logging() -> None:
+    log_path = paths.log_file()
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(log_path, encoding="utf-8"),
+        ],
+        # The SDK installs its own root handler when ANTHROPIC_LOG is set; without
+        # force, agent.log would stay empty and update_status.py would see nothing.
+        force=True,
+    )
 
 
 def run_autonomous(routine: str) -> str:
@@ -54,7 +70,7 @@ def run_autonomous(routine: str) -> str:
 
 def main() -> int:
     """Entry point — determines which routine to run based on args or time."""
-    import sys
+    _configure_logging()
 
     if len(sys.argv) > 1:
         routine = sys.argv[1]
@@ -74,20 +90,17 @@ def main() -> int:
     result = run_autonomous(routine)
 
     # Save report
-    report_dir = "reports"
-    os.makedirs(report_dir, exist_ok=True)
-    report_file = os.path.join(
-        report_dir,
-        f"{routine}_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-    )
+    report_dir = paths.reports_dir()
+    report_dir.mkdir(parents=True, exist_ok=True)
+    report_file = report_dir / f"{routine}_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
     with open(report_file, "w", encoding="utf-8") as f:
         f.write(f"=== {routine.upper()} — {datetime.now().isoformat()} ===\n\n")
         f.write(result)
 
     log.info(f"Report saved: {report_file}")
-    # The shared loop returns failures as text. Propagate them to cron/CI
-    # instead of publishing a successful status after an API failure.
-    if result.startswith(("API Error", "Error:", "Agent stopped:")):
+    # Propagate failures to cron/CI instead of exiting 0 after an API error,
+    # an unknown routine or the iteration cap. The report is kept for diagnosis.
+    if result.startswith(FAILURE_PREFIXES):
         log.error("Routine failed; report saved for diagnosis.")
         return 1
     return 0

@@ -11,7 +11,8 @@ BASE_URL = "https://api.github.com"
 
 
 def _headers() -> dict:
-    key = validate_api_key("GITHUB_TOKEN")
+    # GH_TOKEN is the gh CLI / Claude Code cloud convention; accept it too.
+    key = validate_api_key("GITHUB_TOKEN", "GH_TOKEN")
     return {
         "Authorization": f"Bearer {key}",
         "Accept": "application/vnd.github+json",
