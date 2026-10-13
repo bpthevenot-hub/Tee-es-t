@@ -104,7 +104,7 @@ def fetch_hubspot_contacts() -> list:
         json={
             "limit": 50,
             "properties": [
-                "firstname", "lastname", "email", "phone", "company",
+                "firstname", "lastname", "company",
                 "lifecyclestage", "hs_lead_status", "createdate", "lastmodifieddate",
             ],
         },
@@ -112,22 +112,27 @@ def fetch_hubspot_contacts() -> list:
     )
     resp.raise_for_status()
 
-    contacts = []
-    for c in resp.json().get("results", []):
-        p = c.get("properties", {})
-        contacts.append({
-            "id": f"hs_{c['id']}",
-            "firstname": p.get("firstname", ""),
-            "lastname": p.get("lastname", ""),
-            "email": p.get("email", ""),
-            "phone": p.get("phone", ""),
-            "company": p.get("company", ""),
-            "lifecyclestage": p.get("lifecyclestage", "lead"),
-            "hs_lead_status": p.get("hs_lead_status", "NEW"),
-            "last_activity": p.get("lastmodifieddate", ""),
-            "created_at": p.get("createdate", ""),
-        })
-    return contacts
+    return [redact_contact(c) for c in resp.json().get("results", [])]
+
+
+def redact_contact(contact: dict) -> dict:
+    """Return the public-safe view of a HubSpot contact.
+
+    docs/status.json is committed to a public repository, so it must never
+    carry contact details: no email, no phone, last name reduced to an initial.
+    """
+    p = contact.get("properties", {}) or {}
+    lastname = (p.get("lastname") or "").strip()
+    return {
+        "id": f"hs_{contact['id']}",
+        "firstname": p.get("firstname") or "",
+        "lastname": f"{lastname[0]}." if lastname else "",
+        "company": p.get("company") or "",
+        "lifecyclestage": p.get("lifecyclestage") or "lead",
+        "hs_lead_status": p.get("hs_lead_status") or "NEW",
+        "last_activity": p.get("lastmodifieddate") or "",
+        "created_at": p.get("createdate") or "",
+    }
 
 
 def fetch_hubspot_deals() -> list:
