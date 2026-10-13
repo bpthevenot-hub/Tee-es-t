@@ -303,7 +303,25 @@ def test_revoked_token_is_reported_clearly(gmail, clean_env, tmp_path):
 
     result = gmail.execute_gmail_tool("gmail_search_messages", {"query": "is:unread"})
 
-    assert "token refresh failed (invalid_grant" in result
+    assert "refresh failed (invalid_grant" in result
+
+
+def test_revoked_env_token_falls_back_to_valid_file(gmail, clean_env, tmp_path):
+    # A valid-syntax GMAIL_TOKEN_JSON whose refresh is revoked must not shadow a
+    # good token file (e.g. one just re-created by setup_gmail.py).
+    stale = {**VALID_TOKEN, "expiry": "2000-01-01T00:00:00Z"}
+    clean_env.setenv("GMAIL_TOKEN_JSON", json.dumps(stale))
+    (tmp_path / "token.json").write_text(json.dumps(VALID_TOKEN))
+
+    def revoked(self, request):
+        raise gmail.RefreshError("invalid_grant: Token has been expired or revoked.")
+
+    # Only the stale env token is expired and hits refresh; the file is valid.
+    clean_env.setattr(gmail.Credentials, "refresh", revoked)
+    service = object()
+    clean_env.setattr(gmail, "build", lambda *args, **kwargs: service)
+
+    assert gmail._get_gmail_service() is service
 
 
 def test_refreshed_token_survives_read_only_disk(gmail, clean_env, tmp_path):

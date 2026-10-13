@@ -125,6 +125,9 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+          # Token Gmail autorisé pour les runs non interactifs. Sans lui, les
+          # outils Gmail renvoient une erreur propre (plus de blocage navigateur).
+          GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
           GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

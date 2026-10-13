@@ -108,6 +108,57 @@ def _run_consent_flow():
     return flow.run_local_server(port=0, timeout_seconds=CONSENT_TIMEOUT_SECONDS)
 
 
+def _candidate_credentials(token_path, problems):
+    """Yield (label, credentials, persist_refresh) for each configured source,
+    in priority order: GMAIL_TOKEN_JSON, then the token file.
+
+    A source that can't even be parsed is recorded in `problems` and skipped,
+    so it never hides a later usable source.
+    """
+    token_json = os.getenv("GMAIL_TOKEN_JSON", "").strip()
+    if token_json:
+        creds, problem = _creds_from_env(token_json)
+        if problem:
+            problems.append(f"GMAIL_TOKEN_JSON: {problem}")
+        else:
+            # The env var stays the source of truth: a refresh is not written to disk.
+            yield "GMAIL_TOKEN_JSON", creds, False
+
+    if token_path.exists():
+        try:
+            file_creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+        except TOKEN_DATA_ERRORS as e:  # corrupt or truncated file
+            problems.append(f"{token_path.name}: unreadable token ({e})")
+        else:
+            yield "token file", file_creds, True
+
+
+def _first_valid_credentials(token_path, problems):
+    """Return valid credentials from the first usable source, or None.
+
+    Each source is validated (and refreshed) independently, so a revoked or
+    expired GMAIL_TOKEN_JSON falls back to a valid token file rather than
+    shadowing it — e.g. after re-running setup_gmail.py locally.
+    """
+    for label, creds, persist in _candidate_credentials(token_path, problems):
+        if creds.valid:
+            return creds
+        if creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+            except RefreshError as e:  # revoked, or a 7-day "Testing" OAuth app
+                problems.append(f"{label}: refresh failed ({e.args[0] if e.args else e})")
+                continue
+            if persist:
+                try:
+                    _write_private(token_path, creds.to_json())
+                except OSError as e:  # read-only checkout: keep the token in memory
+                    log.warning(f"Could not save the refreshed Gmail token: {e}")
+            return creds
+        problems.append(f"{label}: expired without a usable refresh token")
+    return None
+
+
 def _get_gmail_service():
     """Authenticate and return the Gmail API service."""
     global _service
@@ -118,42 +169,11 @@ def _get_gmail_service():
         raise RuntimeError("Gmail dependencies not installed. Run: pip install -r requirements.txt")
 
     token_path = paths.gmail_token_path()
-    creds = None
-    from_env = False
     problems = []
+    creds = _first_valid_credentials(token_path, problems)
 
-    # 1. Token from env var (CI, Railway, Render). The env var stays the source
-    #    of truth, so it is never copied to disk.
-    token_json = os.getenv("GMAIL_TOKEN_JSON", "").strip()
-    if token_json:
-        creds, problem = _creds_from_env(token_json)
-        if problem:
-            problems.append(f"GMAIL_TOKEN_JSON: {problem}")
-        from_env = creds is not None
-
-    # 2. Token file written by setup_gmail.py
-    if creds is None and token_path.exists():
-        try:
-            creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
-        except TOKEN_DATA_ERRORS as e:  # corrupt or truncated file
-            problems.append(f"{token_path.name}: unreadable token ({e})")
-
-    # 3. Refresh if expired, keeping the token file up to date
-    if creds and creds.expired and creds.refresh_token:
-        try:
-            creds.refresh(Request())
-        except RefreshError as e:  # revoked, or a 7-day "Testing" OAuth app
-            problems.append(f"token refresh failed ({e.args[0] if e.args else e})")
-            creds = None
-        else:
-            if not from_env:
-                try:
-                    _write_private(token_path, creds.to_json())
-                except OSError as e:  # read-only checkout: keep the token in memory
-                    log.warning(f"Could not save the refreshed Gmail token: {e}")
-
-    # 4. No usable token: browser consent, but never in unattended runs
-    if not creds or not creds.valid:
+    # No usable token: browser consent, but never in unattended runs.
+    if creds is None:
         detail = f" ({'; '.join(problems)})" if problems else ""
         if not _is_interactive():
             raise RuntimeError(
