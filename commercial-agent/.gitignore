@@ -1,0 +1,19 @@
+# Secrets — never commit
+.env
+config/gmail_token.json
+config/gmail_credentials.json
+
+# Runtime outputs (see config/paths.py; AGENT_DATA_DIR moves them elsewhere)
+*.log
+reports/
+livrables/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# OS
+.DS_Store

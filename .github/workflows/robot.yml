@@ -2,8 +2,15 @@ name: Robot Commercial - Routines automatiques
 
 on:
   schedule:
-    # Toutes les 10 minutes
-    - cron: '*/10 * * * *'
+    # Heures UTC ; l'etape "Determine routine" classe selon l'heure de Paris.
+    # Chaque routine est lancee une fois par creneau (au lieu de toutes les 10
+    # min = 144 appels Opus/jour), ce qui evite les doublons et le coût inutile.
+    # Minutes volontairement hors de l'heure pile : GitHub retarde ou abandonne
+    # plus souvent les crons a HH:00, et une occurrence unique perdue = routine
+    # sautee pour la journee/semaine.
+    - cron: '30 5 * * 1-5'   # ~7h30 Paris -> morning
+    - cron: '17 12 * * 1-5'  # ~14h17 Paris -> followup
+    - cron: '23 15 * * 5'    # ~17h23 Paris vendredi -> weekly_audit
   workflow_dispatch:
     inputs:
       routine:
@@ -131,6 +138,9 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+          # Token Gmail autorisé pour les runs non interactifs. Sans lui, les
+          # outils Gmail renvoient une erreur propre (plus de blocage navigateur).
+          GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
           GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

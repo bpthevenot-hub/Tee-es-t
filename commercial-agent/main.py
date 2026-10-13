@@ -7,11 +7,12 @@ cron entry point). This file just wires a REPL around it.
 
 from dotenv import load_dotenv
 
-from agent_loop import run_agent_loop
-from config.system_prompt import get_system_prompt
-from tools import ALL_TOOLS, execute_tool
-
+# Load .env before importing modules that resolve settings at import time.
 load_dotenv()
+
+from agent_loop import run_agent_loop  # noqa: E402
+from config.system_prompt import get_system_prompt  # noqa: E402
+from tools import ALL_TOOLS, execute_tool  # noqa: E402
 
 
 def run_agent(user_message: str) -> str:

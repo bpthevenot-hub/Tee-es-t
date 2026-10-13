@@ -163,6 +163,11 @@ def run_agent_loop(
         except anthropic.APIError as e:
             log.error(f"  API error: {e}")
             return f"API Error: {e}"
+        except TypeError as e:
+            # The SDK raises TypeError before sending anything when no
+            # credentials are configured (e.g. ANTHROPIC_API_KEY unset).
+            log.error(f"  Client error — check ANTHROPIC_API_KEY: {e}")
+            return f"API Error (client): {e}"
 
         usage = getattr(response, "usage", None)
         if usage is not None:

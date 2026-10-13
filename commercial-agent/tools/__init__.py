@@ -33,7 +33,7 @@ def execute_tool(name: str, input_data: dict) -> str:
         return execute_hubspot_tool(name, input_data)
     elif name.startswith("gmail_"):
         if execute_gmail_tool is None:
-            return "Error: Gmail is not configured. Run the agent locally first with 'python main.py' to complete the OAuth flow, then redeploy."
+            return "Error: Gmail tools are unavailable (Google client libraries failed to import). Run: pip install -r requirements.txt"
         return execute_gmail_tool(name, input_data)
     elif name.startswith("notion_"):
         return execute_notion_tool(name, input_data)

@@ -160,9 +160,12 @@ def test_publish_permission_denial_fails_without_force_push(git_repos, tmp_path)
 def test_robot_exit_code_preserves_report(result, expected_code, monkeypatch, tmp_path):
     import autonomous
 
-    monkeypatch.chdir(tmp_path)
+    # Outputs now follow AGENT_DATA_DIR rather than the working directory.
+    monkeypatch.setenv("AGENT_DATA_DIR", str(tmp_path))
     monkeypatch.setattr("sys.argv", ["autonomous.py", "followup"])
     monkeypatch.setattr(autonomous, "run_autonomous", lambda routine: result)
+    # Real logging setup replaces root handlers; not needed to assert exit codes.
+    monkeypatch.setattr(autonomous, "_configure_logging", lambda: None)
     assert autonomous.main() == expected_code
     reports = list((tmp_path / "reports").glob("followup_*.txt"))
     assert len(reports) == 1
