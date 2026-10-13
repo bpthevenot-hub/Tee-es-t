@@ -2,8 +2,12 @@ name: Robot Commercial - Routines automatiques
 
 on:
   schedule:
-    # Toutes les 10 minutes
-    - cron: '*/10 * * * *'
+    # Heures UTC ; l'etape "Determine routine" classe selon l'heure de Paris.
+    # Chaque routine est lancee une fois par creneau (au lieu de toutes les 10
+    # min = 144 appels Opus/jour), ce qui evite les doublons et le coût inutile.
+    - cron: '30 5 * * 1-5'   # ~7h30 Paris -> morning
+    - cron: '0 12 * * 1-5'   # ~14h00 Paris -> followup
+    - cron: '0 15 * * 5'     # ~17h00 Paris vendredi -> weekly_audit
   workflow_dispatch:
     inputs:
       routine:
