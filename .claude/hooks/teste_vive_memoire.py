@@ -1,4 +1,4 @@
-"""Banc des hooks « vive mémoire » : 30 scénarios, dans un HOME et un état temporaires isolés.
+"""Banc des hooks « vive mémoire » : une soixantaine de vérifications, dans un HOME et un état temporaires isolés.
 
 Usage : python3 teste_vive_memoire.py      (code 0 si tout passe)
 """
@@ -96,6 +96,16 @@ def bloque(j):
     return j.get('decision') == 'block'
 
 
+def assistant(uuid, parent):
+    return {'type': 'assistant', 'uuid': uuid, 'parentUuid': parent, 'message': {'role': 'assistant', 'content': 'ok'}}
+
+
+def ajouter(chemin, *entrees):
+    with open(chemin, 'a', encoding='utf-8') as f:
+        for x in entrees:
+            f.write(json.dumps(x) + '\n')
+
+
 b = Bac()
 t3 = b.transcript('t3', [humain('a'), humain('b'), notif('<task-notification> x'), humain('c')])
 t4 = b.transcript('t4', [humain('a'), humain('b'), humain('c'), humain('d')])
@@ -116,8 +126,8 @@ verifie('07. commande en file humaine comptée une fois', bloque(j) and '4 deman
 tf = b.transcript('tf', [humain('a'), humain('b'), file_humaine('c', 'U9'), humain('c\nd', uuid='E1', mergedSendUuids=['U9'])])
 rc, j = b.stop('S5', tf)
 verifie('08. fusion réelle : envoi en file + envoi propre = 2 demandes, pas 1 ni 3', bloque(j) and '4 demandes' in j.get('reason', ''), j)
-b.appel('prompt', {'session_id': 'S6', 'prompt': 'quatrième demande pas encore écrite'})
-b.appel('prompt', {'session_id': 'S6', 'prompt': '<task-notification> automatique'})
+b.appel('prompt', {'session_id': 'S6', 'prompt': 'quatrième demande pas encore écrite', 'transcript_path': t3})
+b.appel('prompt', {'session_id': 'S6', 'prompt': '<task-notification> automatique', 'transcript_path': t3})
 rc, j = b.stop('S6', t3)
 verifie('09. demande pas encore au transcript comptée (écriture différée)', bloque(j) and '4 demandes' in j.get('reason', ''), j)
 codes = [bloque(b.stop('S7', t4)[1]) for _ in range(3)]
@@ -196,8 +206,9 @@ ti = b.transcript('ti', [humain('a'), humain('b'), humain('c'),
 verifie('30d. image seule envoyée par Baptiste : comptée', bloque(b.stop('S27', ti)[1]))
 tm = b.transcript('tm', [ancien('a'), ancien('b'), ancien('c'), humain('d')])
 verifie('30e. transcript mixte (ancien format puis origin) : demandes additionnées', bloque(b.stop('S28', tm)[1]))
-b.appel('prompt', {'session_id': 'S29', 'prompt': 'merge'})
-tq2 = b.transcript('tq2', [humain('a'), humain('b'), humain('c'), file_humaine('merge', 'Q1')])
+tq2 = b.transcript('tq2', [humain('a'), humain('b'), humain('c')])
+b.appel('prompt', {'session_id': 'S29', 'prompt': 'merge', 'transcript_path': tq2})
+ajouter(tq2, file_humaine('merge', 'Q1'))
 rc, j = b.stop('S29', tq2)
 verifie('30f. demande absorbée en cours de tour : pas comptée deux fois', bloque(j) and '4 demandes' in j.get('reason', ''), j)
 b.poser_dette('ANCIENNE')
@@ -220,15 +231,72 @@ ttl = b.transcript('ttl', [humain('a'), humain('b'), humain('c'),
                            {'type': 'queued_command', 'prompt': [{'type': 'text', 'text': 'en cours de tour'}], 'source_uuid': 'TL1', 'origin': {'kind': 'human'}}])
 verifie('30k. commande en file au premier niveau (format récent) : comptée', bloque(b.stop('S30', ttl)[1]))
 tr = b.transcript('tr', [humain('continue', promptId='P1'), humain('b', promptId='P2'), humain('c', promptId='P3')])
-b.appel('prompt', {'session_id': 'S31', 'prompt': 'continue', 'prompt_id': 'P4'})
-verifie('30l. même texte répété, pas encore écrit : compté (rapprochement par identifiant)', bloque(b.stop('S31', tr)[1]))
-b.appel('prompt', {'session_id': 'S32', 'prompt': 'vérifie le build', 'prompt_id': 'P9'})
+b.appel('prompt', {'session_id': 'S31', 'prompt': 'continue', 'prompt_id': 'P4', 'transcript_path': tr})
+verifie('30l. même texte répété, pas encore écrit : compté', bloque(b.stop('S31', tr)[1]))
+b.appel('prompt', {'session_id': 'S32', 'prompt': 'vérifie le build', 'prompt_id': 'P9', 'transcript_path': t3})
 rc, j = b.stop('S32', t3, session_crons=[{'id': 'loop1', 'recurring': True}])
 verifie('30m. tour planifié pas encore écrit : pas compté comme une demande', not bloque(j) and 'S32' not in b.dette(), j)
 dettes_avant = set(b.dette())
 for s in ('C1', 'C2'):
     b.stop(s, t4)
 verifie('30n. deux sessions notent leur dette sans s\'écraser', {'C1', 'C2'} <= set(b.dette()), b.dette())
+t40 = b.transcript('t40', [])
+def envoyer(session, chemin, texte, ecrire=True):
+    b.appel('prompt', {'session_id': session, 'prompt': texte, 'transcript_path': chemin})
+    if ecrire:
+        ajouter(chemin, humain(texte))
+envoyer('S40', t40, 'go')
+for i in range(2, 21):
+    envoyer('S40', t40, f'demande {i}')
+r = b.python('tamponne', 'S40')
+for i in range(21, 28):
+    envoyer('S40', t40, f'demande {i}')
+envoyer('S40', t40, 'go', ecrire=False)
+rc, j = b.stop('S40', t40)
+verifie('30o. plus de 20 envois, texte d\'une vieille demande répété : la demande en attente compte',
+        '20 demandes' in r.stdout and bloque(j) and '28 demandes' in j.get('reason', ''), [r.stdout, j])
+tqc = b.transcript('tqc', [humain('a'), humain('b'), humain('c')])
+b.appel('prompt', {'session_id': 'S41', 'prompt': 'ajoute ça', 'prompt_id': 'PQ', 'transcript_path': tqc})
+ajouter(tqc, file_humaine('ajoute ça', 'AUTRE-ID'))
+rc, j = b.stop('S41', tqc)
+verifie('30p. commande absorbée sous un autre identifiant que le prompt_id : comptée une fois', bloque(j) and '4 demandes' in j.get('reason', ''), j)
+branche = [humain('a', uuid='h1', parentUuid=None), assistant('a1', 'h1'), humain('b', uuid='h2', parentUuid='a1'), assistant('a2', 'h2'),
+           humain('c', uuid='h3', parentUuid='a2'), assistant('a3', 'h3'), humain('d', uuid='h4', parentUuid='a3'), assistant('a4', 'h4'),
+           humain('c bis', uuid='h3b', parentUuid='a2'), assistant('a3b', 'h3b')]
+tbr = b.transcript('tbr', branche)
+verifie('30q. /rewind : les tours abandonnés ne comptent pas (3 demandes actives sur 5 écrites)', not bloque(b.stop('S43', tbr)[1]))
+ajouter(tbr, humain('d bis', uuid='h4b', parentUuid='a3b'), assistant('a4b', 'h4b'))
+rc, j = b.stop('S43', tbr)
+verifie('30q2. … et la branche active compte toutes ses demandes', bloque(j) and '4 demandes' in j.get('reason', ''), j)
+tcp = b.transcript('tcp', [humain('a', uuid='h1', parentUuid=None), assistant('a1', 'h1'), humain('b', uuid='h2', parentUuid='a1'), assistant('a2', 'h2'),
+                           humain('c', uuid='h3', parentUuid='a2'), assistant('a3', 'h3'),
+                           {'type': 'system', 'subtype': 'compact_boundary', 'uuid': 'B', 'parentUuid': None, 'logicalParentUuid': 'a3'},
+                           humain('d', uuid='h4', parentUuid='B'), assistant('a4', 'h4')])
+rc, j = b.stop('S44', tcp)
+verifie('30r. compaction : la chaîne passe la frontière (logicalParentUuid)', bloque(j) and '4 demandes' in j.get('reason', ''), j)
+tpl = b.transcript('tpl', [humain('a', uuid='h1', parentUuid=None), assistant('a1', 'h1'), humain('b', uuid='h2', parentUuid='a1'),
+                           assistant('t1', 'h2'), assistant('t2', 't1'),
+                           {'type': 'user', 'uuid': 'r1', 'parentUuid': 't1', 'message': {'role': 'user', 'content': [{'type': 'tool_result'}]}},
+                           {'type': 'user', 'uuid': 'r2', 'parentUuid': 't2', 'message': {'role': 'user', 'content': [{'type': 'tool_result'}]}},
+                           assistant('a3', 'r2'), humain('c', uuid='h3', parentUuid='a3'), assistant('a4', 'h3'),
+                           humain('d', uuid='h4', parentUuid='a4'),
+                           {'type': 'user', 'uuid': 'r9', 'parentUuid': 't1', 'message': {'role': 'user', 'content': [{'type': 'tool_result'}]}}])
+rc, j = b.stop('S45', tpl)
+verifie('30r2. appels d\'outils parallèles (feuilles latérales) : aucune demande perdue', bloque(j) and '4 demandes' in j.get('reason', ''), j)
+tcs = b.transcript('tcs', [humain('a', uuid='h1', parentUuid='ABSENT'), humain('b', uuid='h2', parentUuid='h1'),
+                           humain('c', uuid='h3', parentUuid='h1'), humain('d', uuid='h4', parentUuid='h3')])
+rc, j = b.stop('S46', tcs)
+verifie('30r3. chaîne rompue (parent absent du fichier) : rien n\'est filtré', bloque(j) and '4 demandes' in j.get('reason', ''), j)
+tann = b.transcript('tann', [humain('a'), humain('b'), humain('c')])
+b.appel('prompt', {'session_id': 'S47', 'prompt': 'demande annulée avant écriture', 'transcript_path': tann})
+rc, j = b.stop('S47', tann)
+rc2, j2 = b.stop('S47', tann)
+verifie('30t. demande jamais écrite : comptée à son Stop, plus aux suivants', bloque(j) and not bloque(j2), [j, j2])
+b.poser_dette('D1', nb=4)
+shutil.copy(t4, proj / 'D1.jsonl')
+(b.etat / 'D1.json').mkdir()
+r = b.python('tamponne', 'D1')
+verifie('30s. tampon non inscriptible : la dette reste', r.returncode == 1 and 'D1' in b.dette(), [r.returncode, r.stdout, b.dette()])
 rc, j, _, _ = b.appel('stop', 'pas du json')
 verifie('30a. entrée invalide : code 0, rien', rc == 0 and j == {}, j)
 verifie('30b. transcript illisible (dossier) : pas de blocage', not bloque(b.stop('S22', str(b.racine))[1]))
@@ -237,20 +305,21 @@ verifie('30c. le hook ne sort jamais en code 2', {b.stop('S23', t4)[0] for _ in 
 # --- installeur Mac, dans un HOME temporaire
 h = b.racine / 'mac'; (h / '.claude').mkdir(parents=True)
 (h / '.claude/settings.json').write_text(json.dumps({'model': 'opus', 'hooks': {'Stop': [{'matcher': '', 'hooks': [
-    {'type': 'command', 'command': 'echo voisin'}, {'type': 'command', 'command': 'bash /ancien/vive-memoire-stop.sh stop'}]}]}}))
+    {'type': 'command', 'command': 'echo voisin'}, {'type': 'command', 'command': 'bash ~/bin/vive-memoire-audit stop'},
+    {'type': 'command', 'command': 'bash /ancien/vive-memoire-stop.sh stop'}]}]}}))
 env_mac = dict(BASE_ENV, HOME=str(h))
 r1 = subprocess.run(['bash', str(ICI / 'installe-mac.sh')], capture_output=True, text=True, env=env_mac)
 r2 = subprocess.run(['bash', str(ICI / 'installe-mac.sh')], capture_output=True, text=True, env=env_mac)
 s = json.loads((h / '.claude/settings.json').read_text())
 cmds = [x['command'] for g in s['hooks']['Stop'] for x in g['hooks']]
-verifie('31. installeur idempotent, voisin conservé, ancienne entrée remplacée',
+verifie('31. installeur idempotent, voisins conservés (même « vive-memoire-audit »), ancienne entrée remplacée',
         r1.returncode == r2.returncode == 0 and s.get('model') == 'opus' and 'echo voisin' in cmds
-        and sum('vive-memoire' in c for c in cmds) == 1 and (h / '.claude/skills/vive-memoire/SKILL.md').exists(), [r1.stdout, r2.stderr, cmds])
+        and 'bash ~/bin/vive-memoire-audit stop' in cmds and sum('vive-memoire-stop.sh' in c for c in cmds) == 1 and (h / '.claude/skills/vive-memoire/SKILL.md').exists(), [r1.stdout, r2.stderr, cmds])
 r3 = subprocess.run(['bash', str(ICI / 'installe-mac.sh'), '--retirer'], capture_output=True, text=True, env=env_mac)
 s = json.loads((h / '.claude/settings.json').read_text())
-verifie('32. --retirer enlève hooks et skill, garde le voisin',
+verifie('32. --retirer enlève hooks et skill, garde les voisins',
         r3.returncode == 0 and not (h / '.claude/skills/vive-memoire/SKILL.md').exists()
-        and [x['command'] for g in s['hooks']['Stop'] for x in g['hooks']] == ['echo voisin'], [r3.stdout, s])
+        and [x['command'] for g in s['hooks']['Stop'] for x in g['hooks']] == ['echo voisin', 'bash ~/bin/vive-memoire-audit stop'], [r3.stdout, s])
 r4 = subprocess.run(['bash', str(ICI / 'installe-mac.sh')], capture_output=True, text=True, env=dict(env_mac, CLAUDE_CODE_REMOTE='1'))
 verifie('33. installeur refusé en cloud', r4.returncode == 1, r4.stdout)
 h2 = b.racine / 'mac2'; (h2 / '.claude').mkdir(parents=True); (h2 / '.claude/hooks').write_text('un fichier, pas un dossier')

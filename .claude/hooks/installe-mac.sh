@@ -41,16 +41,19 @@ installer_fichiers() {
 }
 enregistrer() {
 python3 - "$reglages" "$cible_hooks" "${1:-}" <<'PYEOF'
-import json, sys
+import json, re, sys
 from pathlib import Path
 reglages, cible, mode = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+# Nos commandes : un de nos deux scripts, quel que soit son dossier, suivi au plus d'un de nos modes.
+# Une commande voisine qui contient seulement « vive-memoire » (ex. ~/bin/vive-memoire-audit) reste.
+NOTRE = re.compile(r'^\s*(?:bash\s+)?(?:"[^"]*/|\S*/)?vive-memoire-(?:stop|prompt)\.sh"?(?:\s+(?:stop|prompt|debut))?\s*$')
 s = json.loads(reglages.read_text(encoding='utf-8')) if reglages.exists() and reglages.read_text().strip() else {}
 h = s.setdefault('hooks', {})
 for evt in ('Stop', 'UserPromptSubmit', 'SessionStart'):
     groupes = []
     for g in h.get(evt, []):     # ne retirer que nos commandes, pas les voisines du même groupe
         if isinstance(g, dict):
-            g['hooks'] = [x for x in g.get('hooks', []) if 'vive-memoire' not in str(x.get('command', ''))]
+            g['hooks'] = [x for x in g.get('hooks', []) if not (isinstance(x, dict) and NOTRE.match(str(x.get('command', ''))))]
             if g['hooks']:
                 groupes.append(g)
     h[evt] = groupes

@@ -13,7 +13,8 @@ seule la consigne des CLAUDE.md s'applique (D-019).
 
 Garanties : ne bloque jamais sur une erreur (toute exception rend la main sans bloquer),
 au plus 3 relances consécutives puis libération mémorisée + dette rappelée au démarrage
-suivant, état propre à chaque session, ne compte que les demandes humaines.
+suivant, état propre à chaque session, ne compte que les demandes humaines de la branche
+active (pas les tours abandonnés par /rewind).
 État : $VM_ETAT ou ~/.claude/vive-memoire/ (jamais dans un dépôt). Python 3.8+.
 """
 from __future__ import annotations
@@ -21,7 +22,6 @@ from __future__ import annotations
 import glob
 import hashlib
 import json
-from collections import Counter
 import os
 import re
 import sys
@@ -85,74 +85,87 @@ def texte_de(contenu) -> str:
     return ''
 
 
+def chaine_active(liens: dict, feuille):
+    """uuids des ancêtres de « feuille » (parentUuid, et logicalParentUuid à travers une
+    compaction). None si la chaîne est rompue : on ne filtre rien."""
+    vus, u = set(), feuille
+    while u and u not in vus:
+        if u not in liens:
+            return None
+        vus.add(u)
+        direct, logique = liens[u]
+        u = direct or (logique if logique in liens else None)
+    return vus or None
+
+
 def analyser_transcript(chemin: str):
-    """(demandes humaines, empreintes des entrées utilisateur, {session mère: demandes héritées}).
+    """(demandes humaines, position de chaque demande dans le fichier, {session mère: demandes héritées}).
 
     Une demande = un envoi distinct de Baptiste : entrée « user » d'origine « human » (son uuid,
     plus les envois antérieurs qu'elle fusionne : mergedSendUuids), ou commande envoyée en cours
     de tour (queued_command humanTurn, source_uuid). Une image seule compte aussi.
     Entrées sans champ « origin » (anciennes versions, avant la première entrée qui en porte un) :
-    repli par préfixes techniques, additionné."""
-    envois, empreintes, parents, repli, avec_origine = set(), Counter(), {}, 0, False
-    herites, prompt_ids = {}, set()
+    repli par préfixes techniques, additionné.
+    Seule compte la branche active : après /rewind, les tours abandonnés restent dans le fichier.
+    Elle se remonte depuis la dernière demande tapée (une feuille quelconque peut être le résultat
+    latéral d'un appel d'outil parallèle) ; ce qui est écrit après cette demande compte toujours."""
+    liens, candidats, avec_origine, ancre = {}, [], False, None
     try:
-        with open(chemin, encoding='utf-8', errors='replace') as f:
-            for ligne in f:
+        with open(chemin, 'rb') as f:
+            fin = 0
+            for brute in f:
+                debut, fin = fin, fin + len(brute)
                 try:
-                    o = json.loads(ligne)
+                    o = json.loads(brute.decode('utf-8', 'replace'))
                 except ValueError:
                     continue
                 if not isinstance(o, dict):
                     continue
+                uuid = str(o.get('uuid') or '')
+                if uuid and not o.get('isSidechain'):
+                    liens[uuid] = (str(o.get('parentUuid') or ''), str(o.get('logicalParentUuid') or ''))
                 fourche = o.get('forkedFrom')
                 mere = str(fourche.get('sessionId')) if isinstance(fourche, dict) and fourche.get('sessionId') else ''
+                cles = None                    # None : pas une demande ; [] : demande du repli, sans clé
+                a = o.get('attachment')
                 if o.get('type') == 'queued_command':          # format récent : commande en file au premier niveau
                     texte_file = texte_de(o.get('prompt')) or str(o.get('prompt') or '')
-                    if texte_file:
-                        empreintes[empreinte(texte_file)] += 1
                     origine_file = o.get('origin')
                     if (isinstance(origine_file, dict) and origine_file.get('kind') == 'human') or str(o.get('humanTurn')).lower() == 'true':
-                        cle = str(o.get('source_uuid') or o.get('uuid') or empreinte(texte_file))
-                        envois.add(cle)
-                        if mere:
-                            herites.setdefault(mere, set()).add(cle)
-                    continue
-                a = o.get('attachment')
-                if isinstance(a, dict):
-                    if a.get('type') == 'queued_command':
-                        if a.get('prompt'):
-                            empreintes[empreinte(texte_de(a.get('prompt')) or str(a.get('prompt')))] += 1
-                        if str(a.get('humanTurn')).lower() == 'true':
-                            cle = str(a.get('source_uuid') or a.get('delivery_id') or empreinte(str(a.get('prompt'))))
-                            envois.add(cle)
-                            if mere:
-                                herites.setdefault(mere, set()).add(cle)
-                    continue
-                if o.get('type') != 'user' or o.get('isMeta') or o.get('isCompactSummary'):
-                    continue
-                m = o.get('message') if isinstance(o.get('message'), dict) else {}
-                contenu = m.get('content')
-                t = texte_de(contenu).strip()
-                if o.get('promptId'):
-                    prompt_ids.add(str(o.get('promptId')))
-                if t:
-                    empreintes[empreinte(t)] += 1
-                origine = o.get('origin')
-                if isinstance(origine, dict):
-                    avec_origine = True
-                    if origine.get('kind') == 'human' and (t or contenu):
-                        fusion = o.get('mergedSendUuids')
-                        cles = [str(o.get('uuid') or empreinte(t or json.dumps(contenu)[:200]))]
-                        cles += [str(x) for x in fusion] if isinstance(fusion, list) else []
-                        envois.update(cles)
-                        if mere:
-                            herites.setdefault(mere, set()).update(cles)
-                elif t and not avec_origine and not t.startswith(TECHNIQUE):
-                    repli += 1
+                        cles = [str(o.get('source_uuid') or o.get('uuid') or empreinte(texte_file))]
+                elif isinstance(a, dict):
+                    if a.get('type') == 'queued_command' and str(a.get('humanTurn')).lower() == 'true':
+                        cles = [str(a.get('source_uuid') or a.get('delivery_id') or empreinte(str(a.get('prompt'))))]
+                elif o.get('type') == 'user' and not o.get('isMeta') and not o.get('isCompactSummary'):
+                    m = o.get('message') if isinstance(o.get('message'), dict) else {}
+                    contenu = m.get('content')
+                    t = texte_de(contenu).strip()
+                    origine = o.get('origin')
+                    if isinstance(origine, dict):
+                        avec_origine = True
+                        if origine.get('kind') == 'human' and (t or contenu):
+                            fusion = o.get('mergedSendUuids')
+                            cles = [uuid or empreinte(t or json.dumps(contenu)[:200])]
+                            cles += [str(x) for x in fusion] if isinstance(fusion, list) else []
+                            if uuid:
+                                ancre = (uuid, debut)
+                    elif t and not avec_origine and not t.startswith(TECHNIQUE):
+                        cles = []
+                if cles is not None:
+                    candidats.append((uuid, cles, debut, mere))
     except OSError:
         pass
-    parents = {mere: len(cles) for mere, cles in herites.items()}
-    return repli + len(envois), (empreintes, prompt_ids), parents
+    active = chaine_active(liens, ancre[0]) if ancre else None
+    envois, positions, herites = set(), [], {}
+    for uuid, cles, debut, mere in candidats:
+        if active is not None and uuid in liens and uuid not in active and debut < ancre[1]:
+            continue                           # tour abandonné par /rewind
+        nouvelles = [c for c in dict.fromkeys(cles) if c not in envois] if cles else [None]
+        envois.update(c for c in nouvelles if c)
+        positions += [debut] * len(nouvelles)
+        if mere and cles:
+            herites.setdefault(mere, set()).update(cles)
+    return len(positions), positions, {mere: len(c) for mere, c in herites.items()}
 
 
 def dossier_projets() -> Path:
@@ -166,22 +179,18 @@ def trouver_transcript(session: str) -> str:
 
 
 def compter(etat: dict, transcript: str, avec_attente: bool = True):
-    nb, (empreintes, prompt_ids), _ = analyser_transcript(transcript)
+    nb, positions, _ = analyser_transcript(transcript)
     if not avec_attente:
         return nb
-    # Demandes envoyées mais pas encore écrites au transcript (écriture différée), comptées une fois.
-    # Rapprochement par identifiant de prompt ; à défaut, par nombre d'occurrences du même texte.
-    restantes = Counter(empreintes)
+    # Demandes envoyées depuis le dernier Stop mais pas encore écrites au transcript (écriture
+    # différée). Chacune porte la taille du transcript à son envoi : ce qui est écrit après cette
+    # position lui répond (quel qu'en soit le texte ou l'identifiant), le reste est en attente.
+    notees = sorted((p for p in etat.get('prompts') or [] if isinstance(p, dict) and isinstance(p.get('pos'), int)),
+                    key=lambda p: p['pos'])
     attente = 0
-    for p in etat.get('prompts', []):
-        if p.get('technique'):
-            continue
-        if p.get('id'):
-            attente += p['id'] not in prompt_ids
-        elif restantes[p.get('e')] > 0:
-            restantes[p.get('e')] -= 1
-        else:
-            attente += 1
+    for i, p in enumerate(notees):
+        ecrites = sum(1 for x in positions if x >= p['pos'])
+        attente = max(attente, len(notees) - i - ecrites)
     return nb + attente
 
 
@@ -232,14 +241,17 @@ def sortie(objet: dict) -> None:
     sys.stdout.write(json.dumps(objet, ensure_ascii=False) + '\n')
 
 
-def mode_prompt(entree: dict, etat: dict, f_etat: Path) -> int:
+def mode_prompt(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     t = str(entree.get('prompt') or '').strip()
-    if entree.get('transcript_path'):
-        etat['transcript'] = str(entree['transcript_path'])
-    if t:
-        prompts = (etat.get('prompts') or [])[-19:]
-        prompts.append({'e': empreinte(t), 'id': str(entree.get('prompt_id') or ''), 'technique': t.startswith(TECHNIQUE)})
-        etat['prompts'] = prompts
+    chemin = str(entree.get('transcript_path') or '') or etat.get('transcript') or trouver_transcript(session)
+    if chemin:
+        etat['transcript'] = chemin
+    if t and not t.startswith(TECHNIQUE):
+        try:
+            pos = os.path.getsize(chemin) if chemin else 0
+        except OSError:
+            pos = 0                            # transcript pas encore créé (première demande)
+        etat['prompts'] = [p for p in etat.get('prompts') or [] if isinstance(p, dict) and 'pos' in p][-19:] + [{'pos': pos}]
         ecrire_json(f_etat, etat)
     return 0
 
@@ -260,10 +272,11 @@ def mode_tamponne(session: str, transcript: str) -> int:
     _, _, parents = analyser_transcript(chemin)
     etat.update({'tampon': nb, 'relances': 0, 'date_tampon': time.strftime('%Y-%m-%d %H:%M')})
     ok = ecrire_json(f_etat, etat)
-    effacer_dette(session)
-    for mere, herite in parents.items():   # une fourche synthétisée couvre ce qu'elle a hérité de sa mère
-        if isinstance(dette.get(mere), dict) and int(dette[mere].get('nb', 0)) <= herite:
-            effacer_dette(mere)
+    if ok:                                 # sans tampon écrit, la dette reste pour le rappel suivant
+        effacer_dette(session)
+        for mere, herite in parents.items():   # une fourche synthétisée couvre ce qu'elle a hérité de sa mère
+            if isinstance(dette.get(mere), dict) and int(dette[mere].get('nb', 0)) <= herite:
+                effacer_dette(mere)
     print(f'Vive mémoire : synthèse enregistrée pour la session {session} ({nb} demandes)'
           + ('' if ok else ' — ATTENTION : état non inscriptible, rien n\'a été écrit') + '.')
     print(f'Inscris aussi « Session : {session} » et « Demandes : {nb} » dans le compte rendu de session.')
@@ -331,6 +344,7 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     _, _, parents = analyser_transcript(chemin)
     planifie = any(isinstance(x, dict) for x in entree.get('session_crons') or [])
     nb = compter(etat, chemin, avec_attente=not planifie)   # un tour planifié n'est pas une demande de Baptiste
+    etat['prompts'] = []      # au Stop suivant, ces demandes-là sont au transcript (ou ne le seront jamais)
     reference = max([int(etat.get('tampon', -1)), int(etat.get('libere_a', -1)), tampon_durable(session)]
                     + [min(reference_session(p), n) for p, n in parents.items() if p != session])
     due = nb >= SEUIL_MIN and not (reference >= 0 and nb - reference < SEUIL_REFRESH)
@@ -404,7 +418,7 @@ def main() -> int:
     etat = lire_json(f_etat, {})
     etat = etat if isinstance(etat, dict) else {}
     if mode == 'prompt':
-        return mode_prompt(entree, etat, f_etat)
+        return mode_prompt(entree, session, etat, f_etat)
     if mode == 'stop':
         return mode_stop(entree, session, etat, f_etat)
     return 0
