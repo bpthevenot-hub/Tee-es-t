@@ -18,14 +18,27 @@ try:
 except ImportError:
     requests = None
 
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
+# Same .env as autonomous.py, so both agree on AGENT_DATA_DIR.
+if load_dotenv is not None:
+    load_dotenv()
+
+from config import paths
 
 logger = logging.getLogger("update_status")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s update_status: %(message)s")
 
 
-STATUS_FILE = os.path.join(os.path.dirname(__file__), "..", "docs", "status.json")
-LOG_FILE = os.path.join(os.path.dirname(__file__), "agent.log")
-LIVRABLES_DIR = os.path.join(os.path.dirname(__file__), "livrables")
+# Read from where autonomous.py writes them (project root or $AGENT_DATA_DIR).
+# The status file keeps its historical default, ../docs/status.json (the site
+# root of the Tee-es-t monorepo); set AGENT_STATUS_FILE to publish elsewhere.
+STATUS_FILE = str(paths.status_file())
+LOG_FILE = str(paths.log_file())
+LIVRABLES_DIR = str(paths.livrables_dir())
 HUBSPOT_BASE = "https://api.hubapi.com"
 
 
@@ -104,7 +117,7 @@ def fetch_hubspot_contacts() -> list:
         json={
             "limit": 50,
             "properties": [
-                "firstname", "lastname", "email", "phone", "company",
+                "firstname", "lastname", "company",
                 "lifecyclestage", "hs_lead_status", "createdate", "lastmodifieddate",
             ],
         },
@@ -112,22 +125,27 @@ def fetch_hubspot_contacts() -> list:
     )
     resp.raise_for_status()
 
-    contacts = []
-    for c in resp.json().get("results", []):
-        p = c.get("properties", {})
-        contacts.append({
-            "id": f"hs_{c['id']}",
-            "firstname": p.get("firstname", ""),
-            "lastname": p.get("lastname", ""),
-            "email": p.get("email", ""),
-            "phone": p.get("phone", ""),
-            "company": p.get("company", ""),
-            "lifecyclestage": p.get("lifecyclestage", "lead"),
-            "hs_lead_status": p.get("hs_lead_status", "NEW"),
-            "last_activity": p.get("lastmodifieddate", ""),
-            "created_at": p.get("createdate", ""),
-        })
-    return contacts
+    return [redact_contact(c) for c in resp.json().get("results", [])]
+
+
+def redact_contact(contact: dict) -> dict:
+    """Return the public-safe view of a HubSpot contact.
+
+    docs/status.json is committed to a public repository, so it must never
+    carry contact details: no email, no phone, last name reduced to an initial.
+    """
+    p = contact.get("properties", {}) or {}
+    lastname = (p.get("lastname") or "").strip()
+    return {
+        "id": f"hs_{contact['id']}",
+        "firstname": p.get("firstname") or "",
+        "lastname": f"{lastname[0]}." if lastname else "",
+        "company": p.get("company") or "",
+        "lifecyclestage": p.get("lifecyclestage") or "lead",
+        "hs_lead_status": p.get("hs_lead_status") or "NEW",
+        "last_activity": p.get("lastmodifieddate") or "",
+        "created_at": p.get("createdate") or "",
+    }
 
 
 def fetch_hubspot_deals() -> list:

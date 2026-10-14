@@ -65,9 +65,12 @@ class AuthError(Exception):
     pass
 
 
-def validate_api_key(key_name: str) -> str:
+def validate_api_key(key_name: str, *fallbacks: str) -> str:
+    """Return the first non-empty value among `key_name` and its fallbacks."""
     import os
-    val = os.getenv(key_name, "").strip()
-    if not val:
-        raise AuthError(f"Missing environment variable: {key_name}")
-    return val
+    for name in (key_name, *fallbacks):
+        val = os.getenv(name, "").strip()
+        if val:
+            return val
+    names = " or ".join((key_name, *fallbacks))
+    raise AuthError(f"Missing environment variable: {names}")

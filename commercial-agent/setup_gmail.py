@@ -10,11 +10,30 @@ This will:
 3. Print the token so you can paste it in Railway
 """
 
+import json
 import os
 import sys
-from pathlib import Path
+
+from config import paths
+
+try:  # honour GMAIL_* overrides from .env, like main.py / autonomous.py
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
+
+def _write_private(path, content: str) -> None:
+    """Write a secret file readable by the current user only."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(content)
+    os.chmod(path, 0o600)
+
 
 def main():
+    if load_dotenv is not None:
+        load_dotenv()
+
     # Install dependencies if needed
     try:
         from google.auth.transport.requests import Request
@@ -34,25 +53,21 @@ def main():
         "https://www.googleapis.com/auth/gmail.readonly",
     ]
 
-    config_dir = Path(__file__).parent / "config"
-    config_dir.mkdir(exist_ok=True)
+    # Same locations as tools/gmail.py (project config/ dir, or the
+    # GMAIL_CREDENTIALS_PATH / GMAIL_TOKEN_PATH overrides).
+    credentials_path = paths.gmail_credentials_path()
+    token_path = paths.gmail_token_path()
+    token_path.parent.mkdir(parents=True, exist_ok=True)
 
-    credentials_path = config_dir / "gmail_credentials.json"
-    token_path = config_dir / "gmail_token.json"
-
-    # Check if credentials file exists, if not create it from env or prompt
-    if not credentials_path.exists():
-        env_json = os.getenv("GMAIL_CREDENTIALS_JSON")
-        if env_json:
-            credentials_path.write_text(env_json)
-            print("Credentials ecrites depuis GMAIL_CREDENTIALS_JSON")
-        else:
-            print("\nFichier gmail_credentials.json introuvable.")
-            print("Options :")
-            print("  1. Telecharge-le depuis https://console.cloud.google.com/apis/credentials")
-            print("  2. Place-le dans commercial-agent/config/gmail_credentials.json")
-            print("  3. Ou definis la variable GMAIL_CREDENTIALS_JSON avec le contenu JSON")
-            sys.exit(1)
+    # OAuth client: the downloaded file, or GMAIL_CREDENTIALS_JSON (kept in memory)
+    env_json = os.getenv("GMAIL_CREDENTIALS_JSON", "").strip()
+    if not credentials_path.exists() and not env_json:
+        print("\nFichier gmail_credentials.json introuvable.")
+        print("Options :")
+        print("  1. Telecharge-le depuis https://console.cloud.google.com/apis/credentials")
+        print(f"  2. Place-le dans {credentials_path}")
+        print("  3. Ou definis la variable GMAIL_CREDENTIALS_JSON avec le contenu JSON")
+        sys.exit(1)
 
     # Check for existing token
     creds = None
@@ -63,7 +78,7 @@ def main():
         elif creds and creds.expired and creds.refresh_token:
             print("Token expire, rafraichissement...")
             creds.refresh(Request())
-            token_path.write_text(creds.to_json())
+            _write_private(token_path, creds.to_json())
             print("Token rafraichi !")
         else:
             creds = None
@@ -77,9 +92,12 @@ def main():
         print("  et autorise l'acces.")
         print("=" * 50 + "\n")
 
-        flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
+        if credentials_path.exists():
+            flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
+        else:
+            flow = InstalledAppFlow.from_client_config(json.loads(env_json), SCOPES)
         creds = flow.run_local_server(port=8090)
-        token_path.write_text(creds.to_json())
+        _write_private(token_path, creds.to_json())
         print(f"\nToken sauvegarde dans {token_path}")
 
     # Verify it works

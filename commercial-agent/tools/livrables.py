@@ -9,10 +9,13 @@ import json
 import logging
 from datetime import datetime, timedelta
 
+from config import paths
+
 log = logging.getLogger("commercial-agent")
 
-# Directory for generated documents
-LIVRABLES_DIR = os.path.join(os.path.dirname(__file__), "..", "livrables")
+# Directory for generated documents: <project>/livrables, or $AGENT_DATA_DIR/livrables.
+# Resolved at import, so entry points load .env before importing the tools.
+LIVRABLES_DIR = str(paths.livrables_dir())
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "..", "templates")
 
 

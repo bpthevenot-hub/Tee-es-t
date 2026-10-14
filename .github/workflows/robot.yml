@@ -1,9 +1,15 @@
 name: Robot Commercial - Routines automatiques
 
 on:
-  schedule:
-    # Toutes les 10 minutes
-    - cron: '*/10 * * * *'
+  # Declenchement planifie DESACTIVE le 2026-10-13 a la demande du proprietaire :
+  # le robot ne tourne plus tout seul. Lancement manuel uniquement (workflow_dispatch).
+  # Pour le reactiver, decommenter le bloc ci-dessous (heures UTC ; l'etape
+  # "Determine routine" classe selon l'heure de Paris ; minutes hors heure pile
+  # car GitHub retarde/abandonne plus souvent les crons a HH:00).
+  # schedule:
+  #   - cron: '30 5 * * 1-5'   # ~7h30 Paris -> morning
+  #   - cron: '17 12 * * 1-5'  # ~14h17 Paris -> followup
+  #   - cron: '23 15 * * 5'    # ~17h23 Paris vendredi -> weekly_audit
   workflow_dispatch:
     inputs:
       routine:
@@ -49,16 +55,18 @@ jobs:
           persist-credentials: true
 
       - name: Check required configuration
+        id: config
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           missing=()
           for key in ANTHROPIC_API_KEY HUBSPOT_API_KEY; do
             value="${!key:-}"
             if [[ -z "${value//[[:space:]]/}" ]]; then
               missing+=("$key")
-              echo "::error::Secret requis manquant ou vide : $key."
+              echo "::warning::Secret requis manquant ou vide : $key."
             fi
           done
           secrets_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/settings/secrets/actions"
@@ -72,26 +80,34 @@ jobs:
               printf 'Si elles sont stockees dans un environnement GitHub, le job doit utiliser cet environnement.\n\n'
               printf 'Puis lancer ce workflow depuis la branche par defaut avec `configuration_only` coche.\n'
             } >> "$GITHUB_STEP_SUMMARY"
+            # Execution planifiee : on saute proprement au lieu d'echouer toutes les 10 min.
+            # Lancement manuel : on echoue pour que l'erreur soit visible.
+            if [[ "$EVENT_NAME" == "schedule" ]]; then
+              echo "::warning::Robot ignore : configurer les secrets Actions : $secrets_url"
+              printf 'ready=false\n' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             echo "::error::Configurer les secrets Actions : $secrets_url"
             exit 1
           fi
+          printf 'ready=true\n' >> "$GITHUB_OUTPUT"
           {
             printf '## Configuration presente\n\n'
             printf 'Les deux secrets requis sont disponibles. Ce controle verifie leur presence, pas leur validite API.\n'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Setup Python
-        if: inputs.configuration_only != true
+        if: inputs.configuration_only != true && steps.config.outputs.ready == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       - name: Install dependencies
-        if: inputs.configuration_only != true
+        if: inputs.configuration_only != true && steps.config.outputs.ready == 'true'
         run: pip install -r requirements.txt
 
       - name: Determine routine
-        if: inputs.configuration_only != true
+        if: inputs.configuration_only != true && steps.config.outputs.ready == 'true'
         id: routine
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -117,10 +133,13 @@ jobs:
           printf 'name=%s\n' "$routine" >> "$GITHUB_OUTPUT"
 
       - name: Run robot routine
-        if: inputs.configuration_only != true
+        if: inputs.configuration_only != true && steps.config.outputs.ready == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
+          # Token Gmail autorisé pour les runs non interactifs. Sans lui, les
+          # outils Gmail renvoient une erreur propre (plus de blocage navigateur).
+          GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
           GMAIL_CREDENTIALS_JSON: ${{ secrets.GMAIL_CREDENTIALS_JSON }}
           NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -132,7 +151,7 @@ jobs:
         run: python autonomous.py "$ROUTINE"
 
       - name: Update website status
-        if: inputs.configuration_only != true
+        if: inputs.configuration_only != true && steps.config.outputs.ready == 'true'
         env:
           HUBSPOT_API_KEY: ${{ secrets.HUBSPOT_API_KEY }}
           ROUTINE: ${{ steps.routine.outputs.name }}
@@ -140,7 +159,7 @@ jobs:
         run: python update_status.py "$ROUTINE"
 
       - name: Commit and push status update
-        if: inputs.configuration_only != true
+        if: inputs.configuration_only != true && steps.config.outputs.ready == 'true'
         working-directory: .
         env:
           ROUTINE: ${{ steps.routine.outputs.name }}
