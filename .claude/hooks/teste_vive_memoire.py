@@ -65,10 +65,15 @@ class Bac:
         return subprocess.run([sys.executable, '-I', str(self.hooks / 'vive_memoire.py'), *args], capture_output=True, text=True, env=self.env(sup))
 
     def dette(self):
-        try:
-            return json.loads((self.etat / 'dette.json').read_text())
-        except OSError:
-            return {}
+        dettes = {}
+        for f in (self.etat / 'dettes').glob('*.json'):
+            v = json.loads(f.read_text())
+            dettes[v['session']] = v
+        return dettes
+
+    def poser_dette(self, session, **v):
+        (self.etat / 'dettes').mkdir(parents=True, exist_ok=True)
+        (self.etat / 'dettes' / (session + '.json')).write_text(json.dumps(dict({'session': session, 'nb': 4, 'date': 'x', 't': 0}, **v)))
 
 
 def humain(t, **kw):
@@ -123,7 +128,7 @@ t12 = b.transcript('t12', [humain(str(i)) for i in range(12)])
 verifie('12. huit nouvelles demandes : relance de nouveau', bloque(b.stop('S7', t12)[1]))
 rc, j, out, _ = b.appel('debut', {'session_id': 'S8', 'source': 'startup'})
 verifie('13. dette récente d\'une autre session : pas rappelée (session peut-être en cours)', 'S7' not in out, out[:200])
-d = b.dette(); d['S7']['t'] = time.time() - 7200; (b.etat / 'dette.json').write_text(json.dumps(d))
+b.poser_dette('S7', nb=b.dette()['S7']['nb'], t=time.time() - 7200)
 rc, j, out, _ = b.appel('debut', {'session_id': 'S8', 'source': 'startup'})
 verifie('14. dette de plus d\'une heure : rappelée au démarrage, chemin cité', 'S7' in out and 'vive_memoire.py" tamponne' in out, out[:200])
 rc, j, out, _ = b.appel('debut', {'session_id': 'S7', 'source': 'resume'})
@@ -138,7 +143,7 @@ verifie('18. deux sessions ont chacune leur état', 'relance 2/3' in j.get('reas
 verifie('19. tâche en cours : pause sans relance', not bloque(b.stop('S10', t4, background_tasks=[{'id': 'w1', 'status': 'running'}])[1]))
 verifie('19b. … et la dette est notée pendant la pause', 'S10' in b.dette(), b.dette())
 verifie('20. tâche en file (pending) : pause aussi', not bloque(b.stop('S11', t4, background_tasks=[{'id': 'q1', 'status': 'pending'}])[1]))
-verifie('21. réveil ponctuel planifié : pause aussi', not bloque(b.stop('S12', t4, session_crons=[{'id': 'c1', 'recurring': False}])[1]))
+verifie('21. réveil planifié (ponctuel ou récurrent) : pause aussi', not bloque(b.stop('S12', t4, session_crons=[{'id': 'c1', 'recurring': True}])[1]))
 t5 = b.transcript('t5', [humain(str(i)) for i in range(5)])
 rc, j = b.stop('S10', t5, background_tasks=[{'id': 'w1', 'status': 'running'}])
 verifie('22. même tâche sans fin + nouvelle demande : la pause cesse', bloque(j), j)
@@ -195,11 +200,10 @@ b.appel('prompt', {'session_id': 'S29', 'prompt': 'merge'})
 tq2 = b.transcript('tq2', [humain('a'), humain('b'), humain('c'), file_humaine('merge', 'Q1')])
 rc, j = b.stop('S29', tq2)
 verifie('30f. demande absorbée en cours de tour : pas comptée deux fois', bloque(j) and '4 demandes' in j.get('reason', ''), j)
-(b.etat / 'dette.json').write_text(json.dumps({'ANCIENNE': {'nb': 4, 'date': '2026-08-01', 't': 0}}))
+b.poser_dette('ANCIENNE')
 r = b.python('tamponne', 'ANCIENNE')
 verifie('30g. dette dont le transcript a disparu : effacée', r.returncode == 0 and 'ANCIENNE' not in b.dette(), r.stdout)
-noter = {'MERE': {'nb': 5, 'date': 'x', 't': 0}}
-(b.etat / 'dette.json').write_text(json.dumps(noter))
+b.poser_dette('MERE', nb=5)
 tfm = b.transcript('FILLE', [humain(x, forkedFrom={'sessionId': 'MERE'}) for x in 'abcde'] + [humain('f')])
 proj = b.home / '.claude/projects/p'; proj.mkdir(parents=True); shutil.copy(tfm, proj / 'FILLE.jsonl')
 r = b.python('tamponne', 'FILLE')
@@ -207,6 +211,24 @@ verifie('30h. tamponner une fourche efface la dette de sa mère', r.returncode =
 cfg = b.racine / 'cfg'; (cfg / 'projects/q').mkdir(parents=True); shutil.copy(t4, cfg / 'projects/q/CFG.jsonl')
 r = b.python('tamponne', 'CFG', sup={'CLAUDE_CONFIG_DIR': str(cfg)})
 verifie('30i. CLAUDE_CONFIG_DIR respecté (transcripts et état)', r.returncode == 0 and (cfg / 'vive-memoire/CFG.json').exists(), r.stdout)
+b.poser_dette('MERE2', nb=10)
+tfm2 = b.transcript('FILLE2', [humain(x, forkedFrom={'sessionId': 'MERE2'}) for x in 'abcde'] + [humain(str(i)) for i in range(6)])
+shutil.copy(tfm2, proj / 'FILLE2.jsonl')
+r = b.python('tamponne', 'FILLE2')
+verifie('30j. dette de la mère comparée aux seules demandes héritées', 'MERE2' in b.dette(), [r.stdout, b.dette()])
+ttl = b.transcript('ttl', [humain('a'), humain('b'), humain('c'),
+                           {'type': 'queued_command', 'prompt': [{'type': 'text', 'text': 'en cours de tour'}], 'source_uuid': 'TL1', 'origin': {'kind': 'human'}}])
+verifie('30k. commande en file au premier niveau (format récent) : comptée', bloque(b.stop('S30', ttl)[1]))
+tr = b.transcript('tr', [humain('continue', promptId='P1'), humain('b', promptId='P2'), humain('c', promptId='P3')])
+b.appel('prompt', {'session_id': 'S31', 'prompt': 'continue', 'prompt_id': 'P4'})
+verifie('30l. même texte répété, pas encore écrit : compté (rapprochement par identifiant)', bloque(b.stop('S31', tr)[1]))
+b.appel('prompt', {'session_id': 'S32', 'prompt': 'vérifie le build', 'prompt_id': 'P9'})
+rc, j = b.stop('S32', t3, session_crons=[{'id': 'loop1', 'recurring': True}])
+verifie('30m. tour planifié pas encore écrit : pas compté comme une demande', not bloque(j) and 'S32' not in b.dette(), j)
+dettes_avant = set(b.dette())
+for s in ('C1', 'C2'):
+    b.stop(s, t4)
+verifie('30n. deux sessions notent leur dette sans s\'écraser', {'C1', 'C2'} <= set(b.dette()), b.dette())
 rc, j, _, _ = b.appel('stop', 'pas du json')
 verifie('30a. entrée invalide : code 0, rien', rc == 0 and j == {}, j)
 verifie('30b. transcript illisible (dossier) : pas de blocage', not bloque(b.stop('S22', str(b.racine))[1]))
@@ -231,6 +253,10 @@ verifie('32. --retirer enlève hooks et skill, garde le voisin',
         and [x['command'] for g in s['hooks']['Stop'] for x in g['hooks']] == ['echo voisin'], [r3.stdout, s])
 r4 = subprocess.run(['bash', str(ICI / 'installe-mac.sh')], capture_output=True, text=True, env=dict(env_mac, CLAUDE_CODE_REMOTE='1'))
 verifie('33. installeur refusé en cloud', r4.returncode == 1, r4.stdout)
+h2 = b.racine / 'mac2'; (h2 / '.claude').mkdir(parents=True); (h2 / '.claude/hooks').write_text('un fichier, pas un dossier')
+r5 = subprocess.run(['bash', str(ICI / 'installe-mac.sh')], capture_output=True, text=True, env=dict(BASE_ENV, HOME=str(h2)))
+reg = (h2 / '.claude/settings.json').read_text() if (h2 / '.claude/settings.json').exists() else ''
+verifie('34. copie impossible : aucune commande enregistrée', r5.returncode != 0 and 'vive-memoire' not in reg, [r5.returncode, reg[:120]])
 shutil.rmtree(b.racine, ignore_errors=True)
 print(f'\n{total} vérifications, {len(echecs)} échec(s)')
 sys.exit(1 if echecs else 0)

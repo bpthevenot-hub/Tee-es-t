@@ -24,6 +24,22 @@ reglages="$config/settings.json"
 python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' || { echo "python3 3.8+ requis (macOS : xcode-select --install)"; exit 1; }
 mkdir -p "$config"
 [ -f "$reglages" ] && cp "$reglages" "$reglages.avant-vive-memoire.$(date +%Y%m%d%H%M%S)"
+# Ordre sûr : à l'installation, fichiers d'abord (préparés puis vérifiés), enregistrement ensuite ;
+# au retrait, enregistrement retiré d'abord, fichiers ensuite. Jamais de commande vers un fichier absent.
+installer_fichiers() {
+  prep="$config/.vive-memoire-prep.$$"
+  rm -rf "$prep"; mkdir -p "$prep/hooks" "$prep/skill"
+  cp "$ici/vive_memoire.py" "$ici/vive-memoire-stop.sh" "$ici/vive-memoire-prompt.sh" "$prep/hooks/"
+  for f in SKILL.md bilan-template.html genere-bilan.py teste-bilan.mjs; do
+    if [ -f "$skill_src/$f" ]; then cp "$skill_src/$f" "$prep/skill/"; fi
+  done
+  [ -s "$prep/hooks/vive_memoire.py" ] && [ -s "$prep/hooks/vive-memoire-stop.sh" ] && [ -s "$prep/skill/SKILL.md" ] \
+    || { rm -rf "$prep"; echo "Copie incomplète ; rien n'a été installé."; exit 1; }
+  mkdir -p "$cible_hooks" "$cible_skill"
+  cp "$prep/hooks/"* "$cible_hooks/"; cp "$prep/skill/"* "$cible_skill/"
+  rm -rf "$prep"
+}
+enregistrer() {
 python3 - "$reglages" "$cible_hooks" "${1:-}" <<'PYEOF'
 import json, sys
 from pathlib import Path
@@ -49,16 +65,14 @@ for evt in list(h):
 reglages.write_text(json.dumps(s, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 print(('Retiré de ' if mode == '--retirer' else 'Installé dans ') + str(reglages))
 PYEOF
-# Fichiers copiés APRÈS l'enregistrement : un échec ici laisse des hooks qui se taisent (fichier absent).
+}
 if [ "${1:-}" = "--retirer" ]; then
+  enregistrer --retirer
   rm -f "$cible_hooks"/vive_memoire.py "$cible_hooks"/vive-memoire-stop.sh "$cible_hooks"/vive-memoire-prompt.sh
   rm -f "$cible_skill"/SKILL.md "$cible_skill"/bilan-template.html "$cible_skill"/genere-bilan.py "$cible_skill"/teste-bilan.mjs
   rmdir "$cible_hooks" "$cible_skill" 2>/dev/null || true
 else
-  mkdir -p "$cible_hooks" "$cible_skill"
-  cp "$ici/vive_memoire.py" "$ici/vive-memoire-stop.sh" "$ici/vive-memoire-prompt.sh" "$cible_hooks/"
-  for f in SKILL.md bilan-template.html genere-bilan.py teste-bilan.mjs; do
-    if [ -f "$skill_src/$f" ]; then cp "$skill_src/$f" "$cible_skill/"; fi
-  done
+  installer_fichiers
+  enregistrer
   echo "Hooks : $cible_hooks — skill : $cible_skill"
 fi

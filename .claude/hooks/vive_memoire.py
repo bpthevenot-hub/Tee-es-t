@@ -21,6 +21,7 @@ from __future__ import annotations
 import glob
 import hashlib
 import json
+from collections import Counter
 import os
 import re
 import sys
@@ -92,8 +93,8 @@ def analyser_transcript(chemin: str):
     de tour (queued_command humanTurn, source_uuid). Une image seule compte aussi.
     Entrées sans champ « origin » (anciennes versions, avant la première entrée qui en porte un) :
     repli par préfixes techniques, additionné."""
-    envois, empreintes, parents, repli, avec_origine = set(), set(), {}, 0, False
-    herites = {}
+    envois, empreintes, parents, repli, avec_origine = set(), Counter(), {}, 0, False
+    herites, prompt_ids = {}, set()
     try:
         with open(chemin, encoding='utf-8', errors='replace') as f:
             for ligne in f:
@@ -105,11 +106,22 @@ def analyser_transcript(chemin: str):
                     continue
                 fourche = o.get('forkedFrom')
                 mere = str(fourche.get('sessionId')) if isinstance(fourche, dict) and fourche.get('sessionId') else ''
+                if o.get('type') == 'queued_command':          # format récent : commande en file au premier niveau
+                    texte_file = texte_de(o.get('prompt')) or str(o.get('prompt') or '')
+                    if texte_file:
+                        empreintes[empreinte(texte_file)] += 1
+                    origine_file = o.get('origin')
+                    if (isinstance(origine_file, dict) and origine_file.get('kind') == 'human') or str(o.get('humanTurn')).lower() == 'true':
+                        cle = str(o.get('source_uuid') or o.get('uuid') or empreinte(texte_file))
+                        envois.add(cle)
+                        if mere:
+                            herites.setdefault(mere, set()).add(cle)
+                    continue
                 a = o.get('attachment')
                 if isinstance(a, dict):
                     if a.get('type') == 'queued_command':
                         if a.get('prompt'):
-                            empreintes.add(empreinte(str(a.get('prompt'))))
+                            empreintes[empreinte(texte_de(a.get('prompt')) or str(a.get('prompt')))] += 1
                         if str(a.get('humanTurn')).lower() == 'true':
                             cle = str(a.get('source_uuid') or a.get('delivery_id') or empreinte(str(a.get('prompt'))))
                             envois.add(cle)
@@ -121,8 +133,10 @@ def analyser_transcript(chemin: str):
                 m = o.get('message') if isinstance(o.get('message'), dict) else {}
                 contenu = m.get('content')
                 t = texte_de(contenu).strip()
+                if o.get('promptId'):
+                    prompt_ids.add(str(o.get('promptId')))
                 if t:
-                    empreintes.add(empreinte(t))
+                    empreintes[empreinte(t)] += 1
                 origine = o.get('origin')
                 if isinstance(origine, dict):
                     avec_origine = True
@@ -138,7 +152,7 @@ def analyser_transcript(chemin: str):
     except OSError:
         pass
     parents = {mere: len(cles) for mere, cles in herites.items()}
-    return repli + len(envois), empreintes, parents
+    return repli + len(envois), (empreintes, prompt_ids), parents
 
 
 def dossier_projets() -> Path:
@@ -151,12 +165,24 @@ def trouver_transcript(session: str) -> str:
     return trouves[0] if trouves else ''
 
 
-def compter(etat: dict, transcript: str):
-    nb, empreintes, _ = analyser_transcript(transcript)
-    # Demandes envoyées mais pas encore écrites au transcript (écriture différée) :
-    # comptées une fois, seulement si elles ressemblent à une demande humaine.
-    attente = [p for p in etat.get('prompts', []) if p.get('e') not in empreintes and not p.get('technique')]
-    return nb + len(attente)
+def compter(etat: dict, transcript: str, avec_attente: bool = True):
+    nb, (empreintes, prompt_ids), _ = analyser_transcript(transcript)
+    if not avec_attente:
+        return nb
+    # Demandes envoyées mais pas encore écrites au transcript (écriture différée), comptées une fois.
+    # Rapprochement par identifiant de prompt ; à défaut, par nombre d'occurrences du même texte.
+    restantes = Counter(empreintes)
+    attente = 0
+    for p in etat.get('prompts', []):
+        if p.get('technique'):
+            continue
+        if p.get('id'):
+            attente += p['id'] not in prompt_ids
+        elif restantes[p.get('e')] > 0:
+            restantes[p.get('e')] -= 1
+        else:
+            attente += 1
+    return nb + attente
 
 
 def chemins_memoire() -> list:
@@ -212,7 +238,7 @@ def mode_prompt(entree: dict, etat: dict, f_etat: Path) -> int:
         etat['transcript'] = str(entree['transcript_path'])
     if t:
         prompts = (etat.get('prompts') or [])[-19:]
-        prompts.append({'e': empreinte(t), 'technique': t.startswith(TECHNIQUE)})
+        prompts.append({'e': empreinte(t), 'id': str(entree.get('prompt_id') or ''), 'technique': t.startswith(TECHNIQUE)})
         etat['prompts'] = prompts
         ecrire_json(f_etat, etat)
     return 0
@@ -223,10 +249,9 @@ def mode_tamponne(session: str, transcript: str) -> int:
     etat = lire_json(f_etat, {})
     etat = etat if isinstance(etat, dict) else {}
     chemin = transcript or etat.get('transcript') or trouver_transcript(session)
-    dette = lire_json(dossier_etat() / 'dette.json', {})
-    dette = dette if isinstance(dette, dict) else {}
+    dette = lire_dettes()
     if not chemin or not Path(chemin).is_file():
-        if dette.pop(session, None) is not None and ecrire_json(dossier_etat() / 'dette.json', dette):
+        if session in dette and effacer_dette(session):
             print(f'Vive mémoire : transcript de la session {session} disparu ; dette effacée sans compte.')
             return 0
         print(f'Vive mémoire : transcript de la session {session} introuvable (dossier {dossier_projets()}) ; rien n\'a été tamponné.')
@@ -235,13 +260,10 @@ def mode_tamponne(session: str, transcript: str) -> int:
     _, _, parents = analyser_transcript(chemin)
     etat.update({'tampon': nb, 'relances': 0, 'date_tampon': time.strftime('%Y-%m-%d %H:%M')})
     ok = ecrire_json(f_etat, etat)
-    avant = len(dette)
-    dette.pop(session, None)
-    for mere in parents:             # une fourche synthétisée couvre l'historique de sa mère
-        if isinstance(dette.get(mere), dict) and int(dette[mere].get('nb', 0)) <= nb:
-            dette.pop(mere, None)
-    if len(dette) != avant:
-        ecrire_json(dossier_etat() / 'dette.json', dette)
+    effacer_dette(session)
+    for mere, herite in parents.items():   # une fourche synthétisée couvre ce qu'elle a hérité de sa mère
+        if isinstance(dette.get(mere), dict) and int(dette[mere].get('nb', 0)) <= herite:
+            effacer_dette(mere)
     print(f'Vive mémoire : synthèse enregistrée pour la session {session} ({nb} demandes)'
           + ('' if ok else ' — ATTENTION : état non inscriptible, rien n\'a été écrit') + '.')
     print(f'Inscris aussi « Session : {session} » et « Demandes : {nb} » dans le compte rendu de session.')
@@ -249,9 +271,7 @@ def mode_tamponne(session: str, transcript: str) -> int:
 
 
 def mode_debut(session: str, source: str) -> int:
-    dette = lire_json(dossier_etat() / 'dette.json', {})
-    if not isinstance(dette, dict):
-        return 0
+    dette = lire_dettes()
     maintenant = time.time()
     dues = {}
     for s, v in dette.items():
@@ -269,18 +289,48 @@ def mode_debut(session: str, source: str) -> int:
     return 0
 
 
+def dossier_dettes() -> Path:
+    return dossier_etat() / 'dettes'
+
+
 def noter_dette(session: str, nb: int) -> None:
-    dette = lire_json(dossier_etat() / 'dette.json', {})
-    dette = dette if isinstance(dette, dict) else {}
-    dette[session] = {'nb': nb, 'date': time.strftime('%Y-%m-%d %H:%M'), 't': time.time()}
-    ecrire_json(dossier_etat() / 'dette.json', dette)
+    ecrire_json(dossier_dettes() / (nom_sur(session) + '.json'),
+                {'session': session, 'nb': nb, 'date': time.strftime('%Y-%m-%d %H:%M'), 't': time.time()})
+
+
+def lire_dettes() -> dict:
+    dettes = {}
+    for f in dossier_dettes().glob('*.json'):
+        v = lire_json(f, None)
+        if isinstance(v, dict) and v.get('session'):
+            dettes[str(v['session'])] = v
+    ancien = lire_json(dossier_etat() / 'dette.json', {})          # format v3.1, encore lu
+    if isinstance(ancien, dict):
+        for s, v in ancien.items():
+            if isinstance(v, dict):
+                dettes.setdefault(s, dict(v, session=s))
+    return dettes
+
+
+def effacer_dette(session: str) -> bool:
+    efface = False
+    try:
+        (dossier_dettes() / (nom_sur(session) + '.json')).unlink()
+        efface = True
+    except OSError:
+        pass
+    ancien = lire_json(dossier_etat() / 'dette.json', {})
+    if isinstance(ancien, dict) and ancien.pop(session, None) is not None:
+        efface = ecrire_json(dossier_etat() / 'dette.json', ancien) or efface
+    return efface
 
 
 def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     chemin = str(entree.get('transcript_path') or '') or etat.get('transcript') or trouver_transcript(session)
     etat['transcript'] = chemin
     _, _, parents = analyser_transcript(chemin)
-    nb = compter(etat, chemin)
+    planifie = any(isinstance(x, dict) for x in entree.get('session_crons') or [])
+    nb = compter(etat, chemin, avec_attente=not planifie)   # un tour planifié n'est pas une demande de Baptiste
     reference = max([int(etat.get('tampon', -1)), int(etat.get('libere_a', -1)), tampon_durable(session)]
                     + [min(reference_session(p), n) for p, n in parents.items() if p != session])
     due = nb >= SEUIL_MIN and not (reference >= 0 and nb - reference < SEUIL_REFRESH)
@@ -292,7 +342,7 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
         if isinstance(x, dict) and x.get('status', 'running') in ('running', 'pending'):
             attente.add('t:' + str(x.get('id') or x.get('description') or len(attente)))
     for x in entree.get('session_crons') or []:
-        if isinstance(x, dict) and not x.get('recurring'):
+        if isinstance(x, dict):
             attente.add('c:' + str(x.get('id') or x.get('prompt') or len(attente)))
     vues = {k: int(n) for k, n in (etat.get('pause') or {}).items() if k in attente}
     for k in attente:
