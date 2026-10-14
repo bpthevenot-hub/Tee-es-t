@@ -47,7 +47,7 @@ def lien(c: dict) -> str:
     url = str(c['lien']).strip()
     if not re.match(r'^https://', url):
         refuse(f'lien non https dans « {c.get("titre", "?")} » : {url[:60]}')
-    return f' <a href="{e(url)}" target="_blank" rel="noopener">{e(c.get("lien_texte", "ouvrir"))} ↗</a>'
+    return f' <a href="{e(url)}" target="_blank" rel="noopener">{e(c.get("lien_texte") or "ouvrir")} ↗</a>'
 
 
 def slug(s: str) -> str:
@@ -65,7 +65,7 @@ def carte(c: dict, etat: str, libelle: str, coche_id: str = '') -> str:
         coche = (f'<label class="coche" for="{coche_id}"><input type="checkbox" id="{coche_id}" aria-describedby="t-{coche_id}"> '
                  f'fait<span class="sr-only"> : {e(c["titre"])}</span></label>')
     return (f'<article class="carte"><span class="etat {etat}">{e(libelle)}</span>'
-            f'<h3{titre_id}>{e(c["titre"])}</h3><p>{e(c.get("texte", ""))}{lien(c)}</p>{coche}</article>')
+            f'<h3{titre_id}>{e(c["titre"])}</h3><p>{e(c.get("texte") or "")}{lien(c)}</p>{coche}</article>')
 
 
 def ids_cases(cartes: list) -> list:
@@ -86,7 +86,7 @@ def question(q: dict, i: int) -> str:
     boutons = ''.join(
         f'<button type="button"{" data-juste" if j == bonne else ""}>{e(c)}</button>' for j, c in enumerate(choix))
     return (f'<article class="question" id="q-{i}"><h3>{e(q["question"])}</h3>'
-            f'<div class="choix" role="group" aria-label="Réponses">{boutons}</div><p class="explication" hidden>{e(q.get("explication", ""))}</p></article>')
+            f'<div class="choix" role="group" aria-label="Réponses">{boutons}</div><p class="explication" hidden>{e(q.get("explication") or "")}</p></article>')
 
 
 def vide(texte: str) -> str:
@@ -120,8 +120,8 @@ def main(argv: list[str]) -> None:
         'TITRE_COURT': e(spec['titre_court']),
         'BILAN_ID': hashlib.sha1((spec['date'] + '|' + spec['titre']).encode('utf-8')).hexdigest()[:10],
         'DATE': e(spec['date']),
-        'DUREE': e(spec.get('duree', '')),
-        'MODELE': e(spec.get('modele', '')),
+        'DUREE': e(spec.get('duree') or ''),
+        'MODELE': e(spec.get('modele') or ''),
         'NB_LIVRES': str(len(spec.get('livre', []))),
         'NB_DECISIONS': str(len(spec.get('decide', []))),
         'NB_SKILLS': str(nb_skills),
@@ -130,7 +130,7 @@ def main(argv: list[str]) -> None:
         'CARTES_LIVRE': ''.join(carte(c, 'ok', 'livré') for c in spec.get('livre', [])) or vide('Rien de livré cette fois.'),
         'CARTES_DECIDE': ''.join(carte(c, 'decision', 'décidé') for c in spec.get('decide', [])) or vide('Aucune décision cette fois.'),
         'CARTES_ATTENTE': ''.join(carte(c, 'attente', 'à toi', i) for c, i in zip(attente, ids)) or vide('Rien ne t\'attend.'),
-        'MOTS': ''.join(f'<button type="button" class="mot" data-mot="{e(m["mot"])}">{e(m["mot"])}<small>{e(m.get("sens", ""))}</small></button>'
+        'MOTS': ''.join(f'<button type="button" class="mot" data-mot="{e(m["mot"])}">{e(m["mot"])}<small>{e(m.get("sens") or "")}</small></button>'
                         for m in spec.get('mots', [])) or vide('Pas de nouveau raccourci.'),
         'QUIZ': ''.join(question(q, i) for i, q in enumerate(spec.get('quiz', []))) or vide('Pas de quiz pour cette session.'),
         'LIGNE_TEMPS': ''.join(f'<li><time>{e(x["quand"])}</time>{e(x["quoi"])}</li>' for x in spec.get('temps', [])) or '<li>Pas de jalon.</li>',
