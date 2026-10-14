@@ -39,8 +39,12 @@ TECHNIQUE = ('<task-notification>', '<local-command', '<command-name>', '<comman
              '<webhook-payload', '<scheduled', '<agent-message', '<child-session-event')
 
 
+def dossier_config() -> Path:
+    return Path(os.environ.get('CLAUDE_CONFIG_DIR') or (Path.home() / '.claude'))
+
+
 def dossier_etat() -> Path:
-    return Path(os.environ.get('VM_ETAT') or (Path.home() / '.claude' / 'vive-memoire'))
+    return Path(os.environ.get('VM_ETAT') or (dossier_config() / 'vive-memoire'))
 
 
 def nom_sur(session: str) -> str:
@@ -81,12 +85,15 @@ def texte_de(contenu) -> str:
 
 
 def analyser_transcript(chemin: str):
-    """(nombre de demandes humaines, empreintes des entrées utilisateur, sessions parentes d'une fourche).
+    """(demandes humaines, empreintes des entrées utilisateur, {session mère: demandes héritées}).
 
-    Demande humaine = envoi distinct : entrée « user » d'origine « human » (identifiée par ses
-    mergedSendUuids ou son uuid) ou commande envoyée en cours de tour (queued_command humanTurn,
-    identifiée par source_uuid). Sans champ « origin » (anciennes versions) : repli par préfixes."""
-    envois, empreintes, parents, repli, avec_origine = set(), set(), set(), 0, False
+    Une demande = un envoi distinct de Baptiste : entrée « user » d'origine « human » (son uuid,
+    plus les envois antérieurs qu'elle fusionne : mergedSendUuids), ou commande envoyée en cours
+    de tour (queued_command humanTurn, source_uuid). Une image seule compte aussi.
+    Entrées sans champ « origin » (anciennes versions, avant la première entrée qui en porte un) :
+    repli par préfixes techniques, additionné."""
+    envois, empreintes, parents, repli, avec_origine = set(), set(), {}, 0, False
+    herites = {}
     try:
         with open(chemin, encoding='utf-8', errors='replace') as f:
             for ligne in f:
@@ -97,36 +104,45 @@ def analyser_transcript(chemin: str):
                 if not isinstance(o, dict):
                     continue
                 fourche = o.get('forkedFrom')
-                if isinstance(fourche, dict) and fourche.get('sessionId'):
-                    parents.add(str(fourche['sessionId']))
+                mere = str(fourche.get('sessionId')) if isinstance(fourche, dict) and fourche.get('sessionId') else ''
                 a = o.get('attachment')
                 if isinstance(a, dict):
-                    if a.get('type') == 'queued_command' and str(a.get('humanTurn')).lower() == 'true':
-                        envois.add(str(a.get('source_uuid') or a.get('delivery_id') or empreinte(str(a.get('prompt')))))
+                    if a.get('type') == 'queued_command':
+                        if a.get('prompt'):
+                            empreintes.add(empreinte(str(a.get('prompt'))))
+                        if str(a.get('humanTurn')).lower() == 'true':
+                            cle = str(a.get('source_uuid') or a.get('delivery_id') or empreinte(str(a.get('prompt'))))
+                            envois.add(cle)
+                            if mere:
+                                herites.setdefault(mere, set()).add(cle)
                     continue
                 if o.get('type') != 'user' or o.get('isMeta') or o.get('isCompactSummary'):
                     continue
                 m = o.get('message') if isinstance(o.get('message'), dict) else {}
-                t = texte_de(m.get('content')).strip()
-                if not t:
-                    continue
-                empreintes.add(empreinte(t))
+                contenu = m.get('content')
+                t = texte_de(contenu).strip()
+                if t:
+                    empreintes.add(empreinte(t))
                 origine = o.get('origin')
                 if isinstance(origine, dict):
                     avec_origine = True
-                    if origine.get('kind') == 'human':
+                    if origine.get('kind') == 'human' and (t or contenu):
                         fusion = o.get('mergedSendUuids')
-                        envois.update(map(str, fusion) if isinstance(fusion, list) and fusion else [str(o.get('uuid') or empreinte(t))])
-                elif not t.startswith(TECHNIQUE):
+                        cles = [str(o.get('uuid') or empreinte(t or json.dumps(contenu)[:200]))]
+                        cles += [str(x) for x in fusion] if isinstance(fusion, list) else []
+                        envois.update(cles)
+                        if mere:
+                            herites.setdefault(mere, set()).update(cles)
+                elif t and not avec_origine and not t.startswith(TECHNIQUE):
                     repli += 1
     except OSError:
         pass
-    nb = len(envois) if avec_origine else repli + len(envois)
-    return nb, empreintes, parents
+    parents = {mere: len(cles) for mere, cles in herites.items()}
+    return repli + len(envois), empreintes, parents
 
 
 def dossier_projets() -> Path:
-    return Path(os.environ.get('CLAUDE_CONFIG_DIR') or (Path.home() / '.claude')) / 'projects'
+    return dossier_config() / 'projects'
 
 
 def trouver_transcript(session: str) -> str:
@@ -157,7 +173,9 @@ def chemins_memoire() -> list:
 
 def tampon_durable(session: str) -> int:
     """Compte rendu commité portant le bloc « Session : <id> » puis « Demandes : <nb> » (survit au conteneur)."""
-    motif = re.compile(r'^Session\s*:\s*' + re.escape(session) + r'\s*\n\s*Demandes\s*:\s*(\d+)', re.M)
+    deco = r'[ \t>*_`-]*'
+    motif = re.compile(r'^' + deco + 'Session' + deco + ':' + deco + re.escape(session) + deco + r'\r?\n'
+                       + deco + 'Demandes' + deco + ':' + deco + r'(\d+)', re.M)
     meilleur = -1
     for memoire in chemins_memoire():
         for cr in (memoire / 'sessions').glob('*.md'):
@@ -205,14 +223,24 @@ def mode_tamponne(session: str, transcript: str) -> int:
     etat = lire_json(f_etat, {})
     etat = etat if isinstance(etat, dict) else {}
     chemin = transcript or etat.get('transcript') or trouver_transcript(session)
+    dette = lire_json(dossier_etat() / 'dette.json', {})
+    dette = dette if isinstance(dette, dict) else {}
     if not chemin or not Path(chemin).is_file():
+        if dette.pop(session, None) is not None and ecrire_json(dossier_etat() / 'dette.json', dette):
+            print(f'Vive mémoire : transcript de la session {session} disparu ; dette effacée sans compte.')
+            return 0
         print(f'Vive mémoire : transcript de la session {session} introuvable (dossier {dossier_projets()}) ; rien n\'a été tamponné.')
         return 1
     nb = compter(etat, chemin)
+    _, _, parents = analyser_transcript(chemin)
     etat.update({'tampon': nb, 'relances': 0, 'date_tampon': time.strftime('%Y-%m-%d %H:%M')})
     ok = ecrire_json(f_etat, etat)
-    dette = lire_json(dossier_etat() / 'dette.json', {})
-    if isinstance(dette, dict) and dette.pop(session, None) is not None:
+    avant = len(dette)
+    dette.pop(session, None)
+    for mere in parents:             # une fourche synthétisée couvre l'historique de sa mère
+        if isinstance(dette.get(mere), dict) and int(dette[mere].get('nb', 0)) <= nb:
+            dette.pop(mere, None)
+    if len(dette) != avant:
         ecrire_json(dossier_etat() / 'dette.json', dette)
     print(f'Vive mémoire : synthèse enregistrée pour la session {session} ({nb} demandes)'
           + ('' if ok else ' — ATTENTION : état non inscriptible, rien n\'a été écrit') + '.')
@@ -251,10 +279,14 @@ def noter_dette(session: str, nb: int) -> None:
 def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     chemin = str(entree.get('transcript_path') or '') or etat.get('transcript') or trouver_transcript(session)
     etat['transcript'] = chemin
-    nb, _, parents = analyser_transcript(chemin)
+    _, _, parents = analyser_transcript(chemin)
     nb = compter(etat, chemin)
-    # Pause quand la session attend du travail : tâches en cours ou en file, réveil ponctuel planifié.
-    # Une même attente ne suspend la synthèse que tant qu'aucune nouvelle demande humaine n'arrive.
+    reference = max([int(etat.get('tampon', -1)), int(etat.get('libere_a', -1)), tampon_durable(session)]
+                    + [min(reference_session(p), n) for p, n in parents.items() if p != session])
+    due = nb >= SEUIL_MIN and not (reference >= 0 and nb - reference < SEUIL_REFRESH)
+    # Pause quand la session attend du travail né depuis la dernière demande humaine (tâche en
+    # cours ou en file, réveil ponctuel planifié). Une attente plus ancienne (serveur de dev,
+    # surveillance sans fin) ne suspend plus rien.
     attente = set()
     for x in entree.get('background_tasks') or []:
         if isinstance(x, dict) and x.get('status', 'running') in ('running', 'pending'):
@@ -262,15 +294,17 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     for x in entree.get('session_crons') or []:
         if isinstance(x, dict) and not x.get('recurring'):
             attente.add('c:' + str(x.get('id') or x.get('prompt') or len(attente)))
-    if attente:
-        deja = set(etat.get('pause_ids') or [])
-        if not (attente <= deja and nb > int(etat.get('pause_nb', nb))):
-            etat.update({'pause_ids': sorted(attente | deja), 'pause_nb': nb if not attente <= deja else int(etat.get('pause_nb', nb))})
-            ecrire_json(f_etat, etat)
-            return 0
-    reference = max([int(etat.get('tampon', -1)), int(etat.get('libere_a', -1)), tampon_durable(session)]
-                    + [reference_session(p) for p in parents if p != session])
-    if nb < SEUIL_MIN or (reference >= 0 and nb - reference < SEUIL_REFRESH):
+    vues = {k: int(n) for k, n in (etat.get('pause') or {}).items() if k in attente}
+    for k in attente:
+        vues.setdefault(k, nb)
+    etat['pause'] = vues
+    etat.pop('pause_ids', None); etat.pop('pause_nb', None)
+    if any(n >= nb for n in vues.values()):
+        if due:
+            noter_dette(session, nb)     # si la discussion est abandonnée pendant l'attente
+        ecrire_json(f_etat, etat)
+        return 0
+    if not due:
         if etat.get('relances'):
             etat['relances'] = 0
         ecrire_json(f_etat, etat)

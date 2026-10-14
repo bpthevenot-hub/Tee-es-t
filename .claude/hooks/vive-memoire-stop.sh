@@ -8,10 +8,16 @@
 mode="${1:-stop}"
 entree=$(cat)
 ici=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-utilisateur="$HOME/.claude/hooks/vive-memoire"
+config="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+utilisateur="$config/hooks/vive-memoire"
 if [ -z "${CLAUDE_CODE_REMOTE:-}" ] && [ -f "$utilisateur/vive_memoire.py" ] \
-   && grep -qF "$utilisateur/vive-memoire-stop.sh" "$HOME/.claude/settings.json" 2>/dev/null \
-   && [ "$ici" != "$(cd "$utilisateur" && pwd)" ]; then exit 0; fi
+   && grep -qF "$utilisateur/vive-memoire-stop.sh" "$config/settings.json" 2>/dev/null \
+   && [ "$ici" != "$(cd "$utilisateur" && pwd)" ]; then
+  if [ "$mode" = debut ] && [ -f "$ici/vive_memoire.py" ] && ! cmp -s "$ici/vive_memoire.py" "$utilisateur/vive_memoire.py"; then
+    echo "Vive mémoire : la copie installée dans $utilisateur diffère de celle du dépôt ; relance « bash $ici/installe-mac.sh » pour la mettre à jour."
+  fi
+  exit 0
+fi
 [ -f "$ici/vive_memoire.py" ] || exit 0
 if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' >/dev/null 2>&1; then
   [ "$mode" = stop ] && printf '%s\n' '{"systemMessage":"Vive mémoire : python3 (3.8 ou plus) est introuvable, la synthèse de fin de discussion n'"'"'est pas vérifiée. macOS : xcode-select --install."}'

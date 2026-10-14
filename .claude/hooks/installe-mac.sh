@@ -17,11 +17,12 @@ for c in "$ici" "$ici/../skills/vive-memoire" "$ici/../../docs/context/skills/vi
   if [ -f "$c/SKILL.md" ]; then skill_src="$c"; break; fi
 done
 [ -n "$skill_src" ] || { echo "Skill vive-memoire introuvable à côté de ce script ; rien n'a été installé."; exit 1; }
-cible_hooks="$HOME/.claude/hooks/vive-memoire"
-cible_skill="$HOME/.claude/skills/vive-memoire"
-reglages="$HOME/.claude/settings.json"
+config="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+cible_hooks="$config/hooks/vive-memoire"
+cible_skill="$config/skills/vive-memoire"
+reglages="$config/settings.json"
 python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' || { echo "python3 3.8+ requis (macOS : xcode-select --install)"; exit 1; }
-mkdir -p "$HOME/.claude"
+mkdir -p "$config"
 [ -f "$reglages" ] && cp "$reglages" "$reglages.avant-vive-memoire.$(date +%Y%m%d%H%M%S)"
 python3 - "$reglages" "$cible_hooks" "${1:-}" <<'PYEOF'
 import json, sys
