@@ -23,7 +23,7 @@
   /* Check-in : énergie × agréabilité — quatre couleurs pleines. */
   --color-q-ambre: #e8b04b;
   --color-q-brique: #c84b3a;
-  --color-q-prune: #5b3a4e;
+  --color-q-prune: #6a365a;
   --color-q-sauge: #4e8a6a;
 
   --font-titre: "Barlow Condensed", "Archivo Narrow", "Roboto Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
@@ -99,6 +99,9 @@ body {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--mode-sourd);
+}
+@media (max-width: 40rem) {
+  .etiquette { font-size: 0.78rem; letter-spacing: 0.1em; }
 }
 .texte { max-width: 65ch; }
 .sourd { color: var(--mode-sourd); }

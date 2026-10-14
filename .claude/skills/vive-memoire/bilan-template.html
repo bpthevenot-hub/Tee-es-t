@@ -1,78 +1,187 @@
-<title>Bilan — {{SUJET}}</title>
+<title>{{TITRE_COURT}}</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
-  :root { --fond:#f6f4ee; --carte:#fff; --encre:#1c2328; --sourdine:#5f6b73; --filet:rgba(28,35,40,.12); --accent:#0e5a63; --vif:#e4572e; --ok:#1f7a4d; --attente:#b07a12; }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --fond:#11181c; --carte:#182127; --encre:#e8eef0; --sourdine:#97a6ad; --filet:rgba(232,238,240,.14); --accent:#6fc2cc; --vif:#f0825c; --ok:#6fd49a; --attente:#e3b15a; } }
-  :root[data-theme="dark"] { --fond:#11181c; --carte:#182127; --encre:#e8eef0; --sourdine:#97a6ad; --filet:rgba(232,238,240,.14); --accent:#6fc2cc; --vif:#f0825c; --ok:#6fd49a; --attente:#e3b15a; }
-  :root[data-theme="light"] { --fond:#f6f4ee; --carte:#fff; --encre:#1c2328; --sourdine:#5f6b73; --filet:rgba(28,35,40,.12); --accent:#0e5a63; --vif:#e4572e; --ok:#1f7a4d; --attente:#b07a12; }
-  body { margin:0; padding:40px 16px 64px; background:var(--fond); color:var(--encre); font-family:-apple-system,system-ui,'Segoe UI',sans-serif; line-height:1.5; }
-  main { max-width:960px; margin:0 auto; }
-  .sur { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--sourdine); margin:0 0 8px; }
-  h1 { font-family:Georgia,serif; font-size:clamp(28px,5vw,42px); line-height:1.1; margin:0 0 6px; text-wrap:balance; }
-  .date { color:var(--sourdine); margin:0 0 28px; }
-  .compteurs { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin:0 0 32px; }
-  .compteur { background:var(--carte); border:1px solid var(--filet); border-radius:14px; padding:14px 16px; }
-  .compteur b { display:block; font-size:30px; font-variant-numeric:tabular-nums; color:var(--accent); }
-  .compteur span { font-size:12.5px; color:var(--sourdine); }
-  .onglets { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 16px; }
-  .onglets button { border:1px solid var(--filet); background:var(--carte); color:var(--encre); border-radius:999px; padding:8px 14px; font:inherit; font-size:14px; cursor:pointer; }
-  .onglets button[aria-selected="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
-  .onglets button:focus-visible { outline:2px solid var(--vif); outline-offset:2px; }
-  section[hidden] { display:none; }
-  .cartes { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); }
-  .carte { background:var(--carte); border:1px solid var(--filet); border-radius:14px; padding:16px 18px; }
-  .carte h3 { margin:0 0 6px; font-size:16px; }
-  .carte p { margin:0; color:var(--sourdine); font-size:14px; }
-  .carte a { color:var(--accent); }
-  .etat { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:2px 8px; border-radius:999px; margin-bottom:8px; }
-  .etat.ok { background:color-mix(in srgb,var(--ok) 15%,transparent); color:var(--ok); }
-  .etat.attente { background:color-mix(in srgb,var(--attente) 18%,transparent); color:var(--attente); }
-  .etat.decision { background:color-mix(in srgb,var(--accent) 15%,transparent); color:var(--accent); }
-  .ligne { position:relative; padding-left:22px; border-left:2px solid var(--filet); display:grid; gap:14px; }
-  .ligne li { list-style:none; position:relative; }
-  .ligne li::before { content:""; position:absolute; left:-29px; top:6px; width:12px; height:12px; border-radius:50%; background:var(--accent); }
-  .ligne time { font-size:12px; color:var(--sourdine); font-variant-numeric:tabular-nums; }
-  .mots { display:flex; flex-wrap:wrap; gap:8px; }
-  .mots code { background:var(--carte); border:1px solid var(--filet); border-radius:8px; padding:6px 10px; font-size:14px; }
-  .mots small { display:block; color:var(--sourdine); font-size:12px; }
-  footer { margin-top:36px; font-size:12.5px; color:var(--sourdine); }
+  /* Carnet de bord : un en-tête-compteur, des onglets, des cartes cochables, un quiz. Une seule couleur d'accent. */
+  :root {
+    --fond: #edf0ec; --carte: #fbfcfa; --encre: #17201b; --sourd: #56635b; --filet: #d3dad4;
+    --accent: #0b6e4f; --sur-accent: #ffffff; --attention: #a8661a; --decide: #4f4482; --ok: #1d7a46;
+    --titre: 'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+    --texte: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --fond: #111714; --carte: #1a221e; --encre: #e4ece6; --sourd: #9aa9a0; --filet: #2c3731;
+    --accent: #4fc79a; --sur-accent: #0b1a13; --attention: #e2a557; --decide: #a99ee6; --ok: #6fd49a; color-scheme: dark; } }
+  :root[data-theme="dark"] {
+    --fond: #111714; --carte: #1a221e; --encre: #e4ece6; --sourd: #9aa9a0; --filet: #2c3731;
+    --accent: #4fc79a; --sur-accent: #0b1a13; --attention: #e2a557; --decide: #a99ee6; --ok: #6fd49a; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fond); color: var(--encre); font: 16px/1.55 var(--texte);
+    padding-block: 40px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  main { max-width: 980px; margin: 0 auto; display: grid; gap: 28px; }
+  .sur { font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--sourd); margin: 0 0 10px; }
+  h1 { font: 700 clamp(30px, 5.4vw, 50px)/1.05 var(--titre); letter-spacing: -.015em; margin: 0; text-wrap: balance; max-width: 22ch; }
+  .date { color: var(--sourd); margin: 10px 0 0; font-family: var(--mono); font-size: 13px; }
+  .compteurs { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .compteur { background: var(--carte); border: 1px solid var(--filet); border-radius: 10px; padding: 14px 16px; display: grid; gap: 2px; }
+  .compteur b { font: 700 34px/1 var(--titre); font-variant-numeric: tabular-nums; color: var(--accent); }
+  .compteur.attention b { color: var(--attention); }
+  .compteur span { font-size: 13px; color: var(--sourd); }
+  .progres { height: 6px; border-radius: 6px; background: var(--filet); overflow: hidden; margin-top: 8px; }
+  .progres i { display: block; height: 100%; width: 0; background: var(--attention); transition: width .3s ease; }
+  .onglets { display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--filet); padding-bottom: 12px; }
+  .onglets button { border: 1px solid var(--filet); background: var(--carte); color: var(--encre); border-radius: 999px; padding: 8px 14px; font: 500 14px/1.2 var(--texte); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .onglets button small { font-family: var(--mono); font-size: 11px; color: var(--sourd); }
+  .onglets button[aria-selected="true"] { background: var(--accent); color: var(--sur-accent); border-color: var(--accent); }
+  .onglets button[aria-selected="true"] small { color: var(--sur-accent); opacity: .8; }
+  button:focus-visible, input:focus-visible, a:focus-visible, .mot:focus-visible { outline: 2px solid var(--attention); outline-offset: 2px; }
+  .cartes { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
+  .carte { background: var(--carte); border: 1px solid var(--filet); border-radius: 10px; padding: 16px 18px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+  .carte h3 { margin: 0; font: 700 17px/1.25 var(--titre); }
+  .carte p { margin: 0; color: var(--sourd); font-size: 14.5px; overflow-wrap: anywhere; }
+  .carte a { color: var(--accent); font-weight: 700; text-underline-offset: 3px; }
+  .etat { justify-self: start; font: 500 10.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; padding: 4px 8px; border-radius: 4px; border: 1px solid currentColor; }
+  .etat.ok { color: var(--ok); } .etat.decision { color: var(--decide); } .etat.attente { color: var(--attention); }
+  .carte.faite { opacity: .55; } .carte.faite h3 { text-decoration: line-through; }
+  .coche { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; margin-top: 4px; }
+  .coche input { width: 18px; height: 18px; accent-color: var(--attention); }
+  .mots { display: flex; flex-wrap: wrap; gap: 10px; }
+  .mot { border: 1px dashed var(--accent); background: var(--carte); color: var(--encre); border-radius: 8px; padding: 10px 12px; font: 500 15px/1.2 var(--mono); cursor: pointer; text-align: left; display: grid; gap: 4px; }
+  .mot small { font: 400 12.5px/1.3 var(--texte); color: var(--sourd); }
+  .mot.copie { border-style: solid; background: var(--accent); color: var(--sur-accent); }
+  .mot.copie small { color: var(--sur-accent); }
+  .ligne { margin: 0; padding: 0 0 0 22px; border-left: 2px solid var(--filet); display: grid; gap: 16px; }
+  .ligne li { list-style: none; position: relative; }
+  .ligne li::before { content: ""; position: absolute; left: -29px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--carte); border: 2px solid var(--accent); }
+  .ligne time { font: 500 12px/1 var(--mono); color: var(--sourd); display: block; margin-bottom: 2px; }
+  .quiz { display: grid; gap: 14px; }
+  .question { background: var(--carte); border: 1px solid var(--filet); border-radius: 10px; padding: 16px 18px; display: grid; gap: 10px; }
+  .question h3 { margin: 0; font: 700 17px/1.3 var(--titre); }
+  .choix { display: flex; flex-wrap: wrap; gap: 8px; }
+  .choix button { border: 1px solid var(--filet); background: var(--fond); color: var(--encre); border-radius: 8px; padding: 8px 12px; font: 500 14px/1.3 var(--texte); cursor: pointer; text-align: left; }
+  .choix button.juste { background: var(--ok); border-color: var(--ok); color: var(--sur-accent); }
+  .choix button.faux { border-color: var(--attention); color: var(--attention); }
+  .explication { margin: 0; color: var(--sourd); font-size: 14px; }
+  .score { font: 500 13px/1 var(--mono); color: var(--sourd); }
+  footer { font-size: 13px; color: var(--sourd); border-top: 1px solid var(--filet); padding-top: 16px; }
+  footer code { font-family: var(--mono); font-size: 12px; }
+  @media (prefers-reduced-motion: reduce) { .progres i { transition: none; } }
 </style>
 <main>
-  <p class="sur">Vive mémoire · bilan de session</p>
-  <h1>{{TITRE}}</h1>
-  <p class="date">{{DATE}} · {{DUREE}} · {{MODELE}}</p>
+  <header>
+    <p class="sur">Vive mémoire · bilan de session</p>
+    <h1>{{TITRE}}</h1>
+    <p class="date">{{DATE}} · {{DUREE}} · {{MODELE}}</p>
+  </header>
 
   <div class="compteurs">
     <div class="compteur"><b>{{NB_LIVRES}}</b><span>livrables</span></div>
     <div class="compteur"><b>{{NB_DECISIONS}}</b><span>décisions journalisées</span></div>
-    <div class="compteur"><b>{{NB_SKILLS}}</b><span>skills créées / enrichies</span></div>
-    <div class="compteur"><b>{{NB_ATTENTE}}</b><span>en attente de Baptiste</span></div>
+    <div class="compteur"><b>{{NB_SKILLS}}</b><span>skills créées ou enrichies</span></div>
+    <div class="compteur attention"><b id="reste">{{NB_ATTENTE}}</b><span>à toi, encore à faire</span><div class="progres" aria-hidden="true"><i id="barre"></i></div></div>
   </div>
 
-  <div class="onglets" role="tablist">
-    <button role="tab" aria-selected="true" aria-controls="t-livre">Livré</button>
-    <button role="tab" aria-selected="false" aria-controls="t-decide">Décidé</button>
-    <button role="tab" aria-selected="false" aria-controls="t-attente">À toi</button>
-    <button role="tab" aria-selected="false" aria-controls="t-mots">Un mot suffit</button>
-    <button role="tab" aria-selected="false" aria-controls="t-temps">Ligne du temps</button>
+  <div class="onglets" role="tablist" aria-label="Sections du bilan">
+    <button role="tab" id="o-livre" aria-selected="true" aria-controls="t-livre">Livré <small>{{NB_LIVRES}}</small></button>
+    <button role="tab" id="o-decide" aria-selected="false" aria-controls="t-decide" tabindex="-1">Décidé <small>{{NB_DECISIONS}}</small></button>
+    <button role="tab" id="o-attente" aria-selected="false" aria-controls="t-attente" tabindex="-1">À toi <small>{{NB_ATTENTE}}</small></button>
+    <button role="tab" id="o-mots" aria-selected="false" aria-controls="t-mots" tabindex="-1">Un mot suffit</button>
+    <button role="tab" id="o-quiz" aria-selected="false" aria-controls="t-quiz" tabindex="-1">Quiz <small>{{NB_QUIZ}}</small></button>
+    <button role="tab" id="o-temps" aria-selected="false" aria-controls="t-temps" tabindex="-1">Ligne du temps</button>
   </div>
 
-  <section id="t-livre" role="tabpanel"><div class="cartes">{{CARTES_LIVRE}}</div></section>
-  <section id="t-decide" role="tabpanel" hidden><div class="cartes">{{CARTES_DECIDE}}</div></section>
-  <section id="t-attente" role="tabpanel" hidden><div class="cartes">{{CARTES_ATTENTE}}</div></section>
-  <section id="t-mots" role="tabpanel" hidden>
-    <p>Ce que tu peux maintenant me demander sans rien détailler :</p>
-    <div class="mots">{{MOTS}}</div>
+  <section id="t-livre" role="tabpanel" aria-labelledby="o-livre"><div class="cartes">{{CARTES_LIVRE}}</div></section>
+  <section id="t-decide" role="tabpanel" aria-labelledby="o-decide" hidden><div class="cartes">{{CARTES_DECIDE}}</div></section>
+  <section id="t-attente" role="tabpanel" aria-labelledby="o-attente" hidden>
+    <div class="cartes">{{CARTES_ATTENTE}}</div>
   </section>
-  <section id="t-temps" role="tabpanel" hidden><ul class="ligne">{{LIGNE_TEMPS}}</ul></section>
+  <section id="t-mots" role="tabpanel" aria-labelledby="o-mots" hidden>
+    <p>Ce que tu peux maintenant me demander sans rien détailler. Un clic copie la phrase.</p>
+    <div class="mots">{{MOTS}}</div>
+    <p class="score" id="copie-etat" aria-live="polite"></p>
+  </section>
+  <section id="t-quiz" role="tabpanel" aria-labelledby="o-quiz" hidden>
+    <div class="quiz">{{QUIZ}}</div>
+    <p class="score" id="score" aria-live="polite"></p>
+  </section>
+  <section id="t-temps" role="tabpanel" aria-labelledby="o-temps" hidden><ul class="ligne">{{LIGNE_TEMPS}}</ul></section>
 
   <footer>Mémoire : <code>claude-macos-app/docs/context</code> · skill <code>vive-memoire</code> · {{PIEGES}}</footer>
 </main>
 <script>
-  var onglets = document.querySelectorAll('[role="tab"]')
-  onglets.forEach(function (b) {
-    b.addEventListener('click', function () {
-      onglets.forEach(function (o) { o.setAttribute('aria-selected', 'false'); document.getElementById(o.getAttribute('aria-controls')).hidden = true })
-      b.setAttribute('aria-selected', 'true'); document.getElementById(b.getAttribute('aria-controls')).hidden = false
+  (function () {
+    var cle = 'bilan:' + document.title
+    function lire() { try { return JSON.parse(localStorage.getItem(cle) || '{}') } catch (e) { return {} } }
+    function ecrire(v) { try { localStorage.setItem(cle, JSON.stringify(v)) } catch (e) {} }
+
+    var onglets = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'))
+    function choisir(b, focus) {
+      onglets.forEach(function (o) {
+        var actif = o === b
+        o.setAttribute('aria-selected', actif ? 'true' : 'false')
+        o.tabIndex = actif ? 0 : -1
+        document.getElementById(o.getAttribute('aria-controls')).hidden = !actif
+      })
+      if (focus) b.focus()
+    }
+    onglets.forEach(function (b, i) {
+      b.addEventListener('click', function () { choisir(b, false) })
+      b.addEventListener('keydown', function (e) {
+        var j = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? onglets.length - 1 : null
+        if (j === null) return
+        e.preventDefault(); choisir(onglets[(j + onglets.length) % onglets.length], true)
+      })
     })
-  })
+    var ancre = location.hash.replace('#', '')
+    var cible = document.getElementById('o-' + ancre)
+    if (cible) choisir(cible, false)
+
+    var etat = lire(); etat.faits = etat.faits || {}
+    var coches = Array.prototype.slice.call(document.querySelectorAll('.coche input'))
+    function compter() {
+      var faits = coches.filter(function (c) { return c.checked }).length
+      document.getElementById('reste').textContent = String(coches.length - faits)
+      document.getElementById('barre').style.width = coches.length ? (100 * faits / coches.length) + '%' : '0'
+    }
+    coches.forEach(function (c) {
+      c.checked = !!etat.faits[c.id]
+      c.closest('.carte').classList.toggle('faite', c.checked)
+      c.addEventListener('change', function () {
+        etat.faits[c.id] = c.checked; ecrire(etat)
+        c.closest('.carte').classList.toggle('faite', c.checked); compter()
+      })
+    })
+    compter()
+
+    document.querySelectorAll('.mot').forEach(function (m) {
+      m.addEventListener('click', function () {
+        var texte = m.getAttribute('data-mot')
+        var annonce = document.getElementById('copie-etat')
+        function ok() { m.classList.add('copie'); annonce.textContent = '« ' + texte + ' » copié. Colle-le dans ta prochaine discussion.'; setTimeout(function () { m.classList.remove('copie') }, 1400) }
+        try { navigator.clipboard.writeText(texte).then(ok, function () { annonce.textContent = 'Copie refusée ici : sélectionne « ' + texte + ' » à la main.' }) }
+        catch (e) { annonce.textContent = 'Copie indisponible ici : sélectionne « ' + texte + ' » à la main.' }
+      })
+    })
+
+    var questions = Array.prototype.slice.call(document.querySelectorAll('.question'))
+    var bons = 0, repondues = 0
+    questions.forEach(function (q) {
+      var boutons = Array.prototype.slice.call(q.querySelectorAll('.choix button'))
+      boutons.forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (q.dataset.repondue) return
+          q.dataset.repondue = '1'; repondues++
+          var juste = b.hasAttribute('data-juste')
+          if (juste) bons++
+          b.classList.add(juste ? 'juste' : 'faux')
+          boutons.forEach(function (x) { if (x.hasAttribute('data-juste')) x.classList.add('juste'); x.setAttribute('aria-disabled', 'true') })
+          q.querySelector('.explication').hidden = false
+          document.getElementById('score').textContent = bons + ' / ' + repondues + (repondues === questions.length ? (bons === questions.length ? ' — tout est en tête.' : ' — la réponse est dans la carte ouverte.') : '')
+        })
+      })
+    })
+  })()
 </script>
