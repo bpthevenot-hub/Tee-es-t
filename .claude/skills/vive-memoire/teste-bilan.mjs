@@ -47,6 +47,17 @@ for (const [nom, opts] of [['bureau-clair', { viewport: { width: 1280, height: 9
     const q = p.locator('.question').first()
     if (await q.locator('button[data-juste]').count() !== 1) erreurs.push(nom + ': question 1 sans bonne réponse unique')
     else { await q.locator('button[data-juste]').click(); score = await p.textContent('#score') }
+    // Ouvrir aussi les autres questions par une mauvaise réponse : explications et verdicts visibles
+    for (let i = 1; i < questions; i++) {
+      const faux = p.locator('.question').nth(i).locator('.choix button:not([data-juste])').first()
+      if (await faux.count()) await faux.click()
+    }
+    debordement = Math.max(debordement, await p.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth))
+  }
+  if (opts.colorScheme === 'dark') {
+    const fond = await p.evaluate(() => getComputedStyle(document.body).backgroundColor)
+    const clair = await p.evaluate(() => { const m = getComputedStyle(document.body).backgroundColor.match(/\d+/g) || []; return m.slice(0, 3).reduce((s, v) => s + Number(v), 0) > 382 })
+    if (clair) erreurs.push(nom + ': thème sombre non appliqué (fond ' + fond + ')')
   }
   await p.screenshot({ path: join(dossier, `${nom}-quiz.png`), fullPage: true })
   await p.focus('#o-quiz'); await p.keyboard.press('ArrowRight')

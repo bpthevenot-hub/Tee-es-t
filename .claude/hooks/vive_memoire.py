@@ -81,12 +81,12 @@ def texte_de(contenu) -> str:
 
 
 def analyser_transcript(chemin: str):
-    """(nombre de demandes humaines, empreintes de toutes les entrées utilisateur).
+    """(nombre de demandes humaines, empreintes des entrées utilisateur, sessions parentes d'une fourche).
 
-    Demande humaine = entrée « user » d'origine « human », ou commande envoyée en cours de
-    tour (attachment queued_command, humanTurn) comptée une fois par source_uuid.
-    Sans champ « origin » (anciennes versions) : repli sur les préfixes techniques."""
-    humaines, file_humaine, empreintes, repli, avec_origine = 0, set(), set(), 0, False
+    Demande humaine = envoi distinct : entrée « user » d'origine « human » (identifiée par ses
+    mergedSendUuids ou son uuid) ou commande envoyée en cours de tour (queued_command humanTurn,
+    identifiée par source_uuid). Sans champ « origin » (anciennes versions) : repli par préfixes."""
+    envois, empreintes, parents, repli, avec_origine = set(), set(), set(), 0, False
     try:
         with open(chemin, encoding='utf-8', errors='replace') as f:
             for ligne in f:
@@ -96,10 +96,13 @@ def analyser_transcript(chemin: str):
                     continue
                 if not isinstance(o, dict):
                     continue
+                fourche = o.get('forkedFrom')
+                if isinstance(fourche, dict) and fourche.get('sessionId'):
+                    parents.add(str(fourche['sessionId']))
                 a = o.get('attachment')
                 if isinstance(a, dict):
                     if a.get('type') == 'queued_command' and str(a.get('humanTurn')).lower() == 'true':
-                        file_humaine.add(str(a.get('source_uuid') or a.get('delivery_id') or empreinte(str(a.get('prompt')))))
+                        envois.add(str(a.get('source_uuid') or a.get('delivery_id') or empreinte(str(a.get('prompt')))))
                     continue
                 if o.get('type') != 'user' or o.get('isMeta') or o.get('isCompactSummary'):
                     continue
@@ -111,22 +114,29 @@ def analyser_transcript(chemin: str):
                 origine = o.get('origin')
                 if isinstance(origine, dict):
                     avec_origine = True
-                    humaines += origine.get('kind') == 'human'
+                    if origine.get('kind') == 'human':
+                        fusion = o.get('mergedSendUuids')
+                        envois.update(map(str, fusion) if isinstance(fusion, list) and fusion else [str(o.get('uuid') or empreinte(t))])
                 elif not t.startswith(TECHNIQUE):
                     repli += 1
     except OSError:
         pass
-    return (humaines if avec_origine else repli) + len(file_humaine), empreintes
+    nb = len(envois) if avec_origine else repli + len(envois)
+    return nb, empreintes, parents
+
+
+def dossier_projets() -> Path:
+    return Path(os.environ.get('CLAUDE_CONFIG_DIR') or (Path.home() / '.claude')) / 'projects'
 
 
 def trouver_transcript(session: str) -> str:
-    motif = str(Path.home() / '.claude' / 'projects' / '*' / (session + '.jsonl'))
+    motif = str(dossier_projets() / '*' / (session + '.jsonl'))
     trouves = glob.glob(motif)
     return trouves[0] if trouves else ''
 
 
 def compter(etat: dict, transcript: str):
-    nb, empreintes = analyser_transcript(transcript)
+    nb, empreintes, _ = analyser_transcript(transcript)
     # Demandes envoyées mais pas encore écrites au transcript (écriture différée) :
     # comptées une fois, seulement si elles ressemblent à une demande humaine.
     attente = [p for p in etat.get('prompts', []) if p.get('e') not in empreintes and not p.get('technique')]
@@ -146,17 +156,24 @@ def chemins_memoire() -> list:
 
 
 def tampon_durable(session: str) -> int:
-    """Compte rendu commité qui porte « Session : <id> » et « Demandes : <nb> » (survit au conteneur)."""
+    """Compte rendu commité portant le bloc « Session : <id> » puis « Demandes : <nb> » (survit au conteneur)."""
+    motif = re.compile(r'^Session\s*:\s*' + re.escape(session) + r'\s*\n\s*Demandes\s*:\s*(\d+)', re.M)
+    meilleur = -1
     for memoire in chemins_memoire():
-        for cr in sorted((memoire / 'sessions').glob('*.md')):
+        for cr in (memoire / 'sessions').glob('*.md'):
             try:
-                t = cr.read_text(encoding='utf-8', errors='replace')
+                m = motif.search(cr.read_text(encoding='utf-8', errors='replace'))
             except OSError:
                 continue
-            if session in t:
-                m = re.search(r'Demandes\s*:\s*(\d+)', t)
-                return int(m.group(1)) if m else 0
-    return -1
+            if m:
+                meilleur = max(meilleur, int(m.group(1)))
+    return meilleur
+
+
+def reference_session(session: str) -> int:
+    etat = lire_json(dossier_etat() / (nom_sur(session) + '.json'), {})
+    etat = etat if isinstance(etat, dict) else {}
+    return max(int(etat.get('tampon', -1)), int(etat.get('libere_a', -1)), tampon_durable(session))
 
 
 def chemin_skill() -> str:
@@ -173,6 +190,8 @@ def sortie(objet: dict) -> None:
 
 def mode_prompt(entree: dict, etat: dict, f_etat: Path) -> int:
     t = str(entree.get('prompt') or '').strip()
+    if entree.get('transcript_path'):
+        etat['transcript'] = str(entree['transcript_path'])
     if t:
         prompts = (etat.get('prompts') or [])[-19:]
         prompts.append({'e': empreinte(t), 'technique': t.startswith(TECHNIQUE)})
@@ -184,7 +203,12 @@ def mode_prompt(entree: dict, etat: dict, f_etat: Path) -> int:
 def mode_tamponne(session: str, transcript: str) -> int:
     f_etat = dossier_etat() / (nom_sur(session) + '.json')
     etat = lire_json(f_etat, {})
-    nb = compter(etat, transcript or trouver_transcript(session))
+    etat = etat if isinstance(etat, dict) else {}
+    chemin = transcript or etat.get('transcript') or trouver_transcript(session)
+    if not chemin or not Path(chemin).is_file():
+        print(f'Vive mémoire : transcript de la session {session} introuvable (dossier {dossier_projets()}) ; rien n\'a été tamponné.')
+        return 1
+    nb = compter(etat, chemin)
     etat.update({'tampon': nb, 'relances': 0, 'date_tampon': time.strftime('%Y-%m-%d %H:%M')})
     ok = ecrire_json(f_etat, etat)
     dette = lire_json(dossier_etat() / 'dette.json', {})
@@ -196,51 +220,80 @@ def mode_tamponne(session: str, transcript: str) -> int:
     return 0 if ok else 1
 
 
-def mode_debut(session: str) -> int:
+def mode_debut(session: str, source: str) -> int:
     dette = lire_json(dossier_etat() / 'dette.json', {})
     if not isinstance(dette, dict):
         return 0
-    autres = {s: v for s, v in dette.items() if s != session and isinstance(v, dict)}
-    if autres:
-        lignes = [f'- session {s} : {v.get("nb", "?")} demandes, libérée le {v.get("date", "?")} sans synthèse' for s, v in autres.items()]
-        print('Vive mémoire : synthèse due par une discussion précédente. Commence par la rattraper avec la skill '
-              f'« vive-memoire » ({chemin_skill()}), puis lance « python3 {ICI / "vive_memoire.py"} tamponne <id> » pour chaque session :\n'
+    maintenant = time.time()
+    dues = {}
+    for s, v in dette.items():
+        if not isinstance(v, dict):
+            continue
+        if s == session and source == 'resume':
+            dues[s] = v                      # on reprend la discussion qui doit sa synthèse
+        elif s != session and maintenant - float(v.get('t', 0)) > 3600:
+            dues[s] = v                      # une autre session, abandonnée depuis plus d'une heure
+    if dues:
+        lignes = [f'- session {s} : {v.get("nb", "?")} demandes, le {v.get("date", "?")}, sans synthèse' for s, v in dues.items()]
+        print('Vive mémoire : synthèse due. Commence par la rattraper avec la skill « vive-memoire » '
+              f'({chemin_skill()}), puis lance « python3 "{ICI / "vive_memoire.py"}" tamponne <id> » pour chaque session :\n'
               + '\n'.join(lignes))
     return 0
 
 
+def noter_dette(session: str, nb: int) -> None:
+    dette = lire_json(dossier_etat() / 'dette.json', {})
+    dette = dette if isinstance(dette, dict) else {}
+    dette[session] = {'nb': nb, 'date': time.strftime('%Y-%m-%d %H:%M'), 't': time.time()}
+    ecrire_json(dossier_etat() / 'dette.json', dette)
+
+
 def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
-    taches = entree.get('background_tasks')
-    if isinstance(taches, list) and any(isinstance(t, dict) and t.get('status', 'running') == 'running' for t in taches):
-        return 0   # session en pause : du travail en arrière-plan la réveillera
-    nb = compter(etat, str(entree.get('transcript_path') or '') or trouver_transcript(session))
-    reference = max(int(etat.get('tampon', -1)), int(etat.get('libere_a', -1)), tampon_durable(session))
+    chemin = str(entree.get('transcript_path') or '') or etat.get('transcript') or trouver_transcript(session)
+    etat['transcript'] = chemin
+    nb, _, parents = analyser_transcript(chemin)
+    nb = compter(etat, chemin)
+    # Pause quand la session attend du travail : tâches en cours ou en file, réveil ponctuel planifié.
+    # Une même attente ne suspend la synthèse que tant qu'aucune nouvelle demande humaine n'arrive.
+    attente = set()
+    for x in entree.get('background_tasks') or []:
+        if isinstance(x, dict) and x.get('status', 'running') in ('running', 'pending'):
+            attente.add('t:' + str(x.get('id') or x.get('description') or len(attente)))
+    for x in entree.get('session_crons') or []:
+        if isinstance(x, dict) and not x.get('recurring'):
+            attente.add('c:' + str(x.get('id') or x.get('prompt') or len(attente)))
+    if attente:
+        deja = set(etat.get('pause_ids') or [])
+        if not (attente <= deja and nb > int(etat.get('pause_nb', nb))):
+            etat.update({'pause_ids': sorted(attente | deja), 'pause_nb': nb if not attente <= deja else int(etat.get('pause_nb', nb))})
+            ecrire_json(f_etat, etat)
+            return 0
+    reference = max([int(etat.get('tampon', -1)), int(etat.get('libere_a', -1)), tampon_durable(session)]
+                    + [reference_session(p) for p in parents if p != session])
     if nb < SEUIL_MIN or (reference >= 0 and nb - reference < SEUIL_REFRESH):
         if etat.get('relances'):
             etat['relances'] = 0
-            ecrire_json(f_etat, etat)
+        ecrire_json(f_etat, etat)
         return 0
     relances = int(etat.get('relances', 0))
     if relances >= MAX_RELANCES:
         etat.update({'relances': 0, 'libere_a': nb})
         ecrire_json(f_etat, etat)
-        dette = lire_json(dossier_etat() / 'dette.json', {})
-        dette = dette if isinstance(dette, dict) else {}
-        dette[session] = {'nb': nb, 'date': time.strftime('%Y-%m-%d %H:%M')}
-        ecrire_json(dossier_etat() / 'dette.json', dette)
-        sortie({'systemMessage': f'Vive mémoire : synthèse non faite après {MAX_RELANCES} relances ({nb} demandes). '
-                                 'Elle sera rappelée au début de la prochaine discussion.'})
+        noter_dette(session, nb)
+        ou = ('en cloud, le rappel ne survit pas au conteneur : ajoute « Synthèse due : session ' + session + ' » en P0 de next-actions.md'
+              if os.environ.get('CLAUDE_CODE_REMOTE') else 'elle sera rappelée au prochain démarrage sur cette machine')
+        sortie({'systemMessage': f'Vive mémoire : synthèse non faite après {MAX_RELANCES} relances ({nb} demandes) ; {ou}.'})
         return 0
     etat['relances'] = relances + 1
     if not ecrire_json(f_etat, etat):
-        # Sans état durable, impossible de borner les relances : on prévient sans bloquer.
         sortie({'systemMessage': 'Vive mémoire : état non inscriptible (' + str(f_etat.parent) + '), synthèse non vérifiée.'})
         return 0
+    noter_dette(session, nb)   # effacée par « tamponne » ; rappelée si la discussion est abandonnée
     commande = f'python3 "{ICI / "vive_memoire.py"}" tamponne {session}'
     sortie({'decision': 'block', 'reason': (
         f'Vive mémoire : cette discussion compte {nb} demandes de Baptiste et aucune synthèse récente '
         f'(relance {relances + 1}/{MAX_RELANCES}). Exécute la skill « vive-memoire » (fichier : {chemin_skill()}) : '
-        'compte rendu de session (avec « Session : ' + session + ' » et « Demandes : ' + str(nb) + ' »), décisions D-xxx, backlog, '
+        'compte rendu de session (avec les lignes « Session : ' + session + ' » puis « Demandes : ' + str(nb) + ' »), décisions D-xxx, backlog, '
         'skills à faire grossir, ponts IA, journal Notion, bilan interactif publié, commit + push. '
         f'Termine par : {commande}. Si cette synthèse est déjà faite dans cette discussion, lance seulement cette commande.')})
     return 0
@@ -262,7 +315,7 @@ def main() -> int:
     if not session:
         return 0
     if mode == 'debut':
-        return mode_debut(session)
+        return mode_debut(session, str(entree.get('source') or ''))
     f_etat = dossier_etat() / (nom_sur(session) + '.json')
     etat = lire_json(f_etat, {})
     etat = etat if isinstance(etat, dict) else {}

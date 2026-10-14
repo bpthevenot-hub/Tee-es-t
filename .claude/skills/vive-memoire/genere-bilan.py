@@ -18,7 +18,7 @@ La spec JSON :
   "pieges":  "réseau du conteneur : WebFetch bloqué"
 }
 Les compteurs sont déduits des listes. Le script refuse : titre, titre_court ou date vides, titre_court de plus
-de 4 mots, lien qui n'est pas en https://, quiz mal formé, et un bilan écrit dans un dossier « bilans/ » qui n'est
+de 4 mots ou de moins de 2, clé inconnue, type invalide, lien qui n'est pas en https://, quiz mal formé, et un bilan écrit dans un dossier « bilans/ » qui n'est
 pas voisin d'un decision-log.md (évite d'écrire la mémoire dans le mauvais dépôt).
 """
 from __future__ import annotations
@@ -58,14 +58,12 @@ def slug(s: str) -> str:
 def carte(c: dict, etat: str, libelle: str, coche_id: str = '') -> str:
     if not str(c.get('titre') or '').strip():
         refuse(f'carte sans titre dans « {libelle} »')
-    titre_id = ''
     coche = ''
     if coche_id:
-        titre_id = f' id="t-{coche_id}"'
-        coche = (f'<label class="coche" for="{coche_id}"><input type="checkbox" id="{coche_id}" aria-describedby="t-{coche_id}"> '
+        coche = (f'<label class="coche" for="{coche_id}"><input type="checkbox" id="{coche_id}"> '
                  f'fait<span class="sr-only"> : {e(c["titre"])}</span></label>')
     return (f'<article class="carte"><span class="etat {etat}">{e(libelle)}</span>'
-            f'<h3{titre_id}>{e(c["titre"])}</h3><p>{e(c.get("texte") or "")}{lien(c)}</p>{coche}</article>')
+            f'<h3>{e(c["titre"])}</h3><p>{e(c.get("texte") or "")}{lien(c)}</p>{coche}</article>')
 
 
 def ids_cases(cartes: list) -> list:
@@ -81,12 +79,14 @@ def question(q: dict, i: int) -> str:
     choix, bonne = q.get('choix'), q.get('bonne')
     if not str(q.get('question') or '').strip() or not isinstance(choix, list) or len(choix) < 2:
         refuse(f'question {i + 1} : texte vide ou moins de deux choix')
+    if not all(isinstance(c, str) and c.strip() for c in choix) or len({c.strip() for c in choix}) != len(choix):
+        refuse(f'question {i + 1} : chaque choix doit être un texte non vide et distinct')
     if not isinstance(bonne, int) or isinstance(bonne, bool) or not 0 <= bonne < len(choix):
         refuse(f'question {i + 1} : « bonne » doit être un index de 0 à {len(choix) - 1}')
     boutons = ''.join(
         f'<button type="button"{" data-juste" if j == bonne else ""}>{e(c)}</button>' for j, c in enumerate(choix))
-    return (f'<article class="question" id="q-{i}"><h3>{e(q["question"])}</h3>'
-            f'<div class="choix" role="group" aria-label="Réponses">{boutons}</div><p class="explication" hidden>{e(q.get("explication") or "")}</p></article>')
+    return (f'<article class="question" id="q-{i}"><h3 id="q-{i}-t">{e(q["question"])}</h3>'
+            f'<div class="choix" role="group" aria-labelledby="q-{i}-t">{boutons}</div><p class="explication" hidden>{e(q.get("explication") or "")}</p></article>')
 
 
 def vide(texte: str) -> str:
@@ -101,15 +101,28 @@ def main(argv: list[str]) -> None:
     spec = json.loads(Path(args[0]).read_text(encoding='utf-8'))
     if not isinstance(spec, dict):
         refuse('la spec doit être un objet JSON')
+    connues = {'titre', 'titre_court', 'sujet', 'date', 'duree', 'modele', 'nb_skills',
+               'livre', 'decide', 'attente', 'mots', 'quiz', 'temps', 'pieges'}
+    if set(spec) - connues:
+        refuse('clés inconnues : ' + ', '.join(sorted(set(spec) - connues)) + ' (faute de frappe ?)')
     for cle in ('titre', 'titre_court', 'date'):
         if not isinstance(spec.get(cle), str) or not spec[cle].strip():
             refuse(f'« {cle} » manquant ou vide')
-    if len(spec['titre_court'].split()) > 4:
+    if not 2 <= len(spec['titre_court'].split()) <= 4:
         refuse('« titre_court » doit tenir en 2 à 4 mots (nom de l\'onglet et de la galerie)')
-    try:
-        nb_skills = int(spec.get('nb_skills', 0))
-    except (TypeError, ValueError):
-        refuse('« nb_skills » doit être un entier')
+    nb_skills = spec.get('nb_skills', 0)
+    if type(nb_skills) is not int or nb_skills < 0:
+        refuse('« nb_skills » doit être un entier positif ou nul')
+    for cle in ('livre', 'decide', 'attente', 'mots', 'quiz', 'temps'):
+        v = spec.get(cle, [])
+        if not isinstance(v, list) or not all(isinstance(x, dict) for x in v):
+            refuse(f'« {cle} » doit être une liste d\'objets')
+    for m in spec.get('mots', []):
+        if not str(m.get('mot') or '').strip():
+            refuse('un élément de « mots » n\'a pas de « mot »')
+    for x in spec.get('temps', []):
+        if not str(x.get('quand') or '').strip() or not str(x.get('quoi') or '').strip():
+            refuse('un élément de « temps » n\'a pas de « quand » ou de « quoi »')
     gabarit = (ICI / 'bilan-template.html').read_text(encoding='utf-8')
     attente = spec.get('attente', [])
     pieges = spec.get('pieges', '')
@@ -143,14 +156,18 @@ def main(argv: list[str]) -> None:
     page = re.sub(r'\{\{([A-Z_]+)\}\}', lambda m: valeurs[m.group(1)], gabarit)
     if not artifact:
         page = '<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n</head>\n<body>\n' + page + '\n</body>\n</html>\n'
-    sortie = Path(args[1])
+    sortie = Path(args[1]).resolve()
     if sortie.parent.name == 'bilans':
         if not (sortie.parent.parent / 'decision-log.md').exists():
             refuse(f'{sortie.parent} n\'est pas le dossier bilans/ de la mémoire (aucun decision-log.md à côté) : mauvais dépôt ?')
         sortie.parent.mkdir(exist_ok=True)
     else:
         sortie.parent.mkdir(parents=True, exist_ok=True)
-    sortie.write_text(page, encoding='utf-8')
+    try:
+        donnees = page.encode('utf-8')
+    except UnicodeEncodeError as x:
+        refuse(f'caractère invalide : {x}')
+    sortie.write_bytes(donnees)
     print(f'bilan écrit : {args[1]} ({len(page)} caractères, {"artifact" if artifact else "autonome"})')
 
 
