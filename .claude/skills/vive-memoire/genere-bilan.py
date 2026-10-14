@@ -8,7 +8,7 @@ Usage :
 La spec JSON :
 {
   "titre": "phrase-titre affichée en h1", "titre_court": "Nom court de l'onglet (2-4 mots)",
-  "date": "14 octobre 2026", "duree": "47 demandes", "modele": "Claude Code (cloud)", "nb_skills": 2,
+  "date": "14 octobre 2026", "duree": "12 demandes", "modele": "Claude Code (cloud)", "nb_skills": 2,
   "livre":   [{"titre": "…", "texte": "…", "lien": "https://…", "lien_texte": "ouvrir"}],
   "decide":  [{"titre": "D-015 — …", "texte": "…"}],
   "attente": [{"titre": "…", "texte": "…", "lien": "…"}],          # cochables, mémorisés dans le navigateur

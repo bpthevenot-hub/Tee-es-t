@@ -19,7 +19,13 @@ session_id=$(echo "$input" | jq -r '.session_id // empty')
 transcript=$(echo "$input" | jq -r '.transcript_path // empty')
 [[ -z "$session_id" || ! -f "$transcript" ]] && exit 0
 
-racine=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+# Racine du projet : celle que Claude Code annonce, sinon le dépôt git courant.
+if [[ -n "$CLAUDE_PROJECT_DIR" && -d "$CLAUDE_PROJECT_DIR" ]]; then
+  racine="$CLAUDE_PROJECT_DIR"
+else
+  racine=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+fi
+mkdir -p "$racine/.claude" 2>/dev/null
 stamp="$racine/.claude/.vive-memoire.stamp"
 SEUIL_MIN=4      # messages de Baptiste avant d'exiger une synthèse
 SEUIL_REFRESH=8  # nouveaux messages depuis la dernière synthèse
@@ -27,18 +33,26 @@ SEUIL_REFRESH=8  # nouveaux messages depuis la dernière synthèse
 # Nombre de vrais messages utilisateur (texte, pas les résultats d'outils).
 nb=$(python3 -I - "$transcript" <<'EOF'
 import json, sys
+# Entrées techniques à ne pas compter : notifications, commandes locales,
+# rappels système, résumé de reprise, légendes d'images.
+TECHNIQUE = ('<task-notification>', '<local-command', '<command-name>', '<command-message>',
+             '<system-reminder>', '[Image:', '[SYSTEM NOTIFICATION', 'Continue from where you left off')
 n = 0
 for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
     try:
         o = json.loads(line)
     except ValueError:
         continue
-    if o.get("type") != "user":
+    if o.get("type") != "user" or o.get("isMeta") or o.get("isCompactSummary"):
         continue
     c = (o.get("message") or {}).get("content")
-    if isinstance(c, str) and c.strip():
-        n += 1
-    elif isinstance(c, list) and any(isinstance(x, dict) and x.get("type") == "text" and x.get("text", "").strip() for x in c):
+    texte = ""
+    if isinstance(c, str):
+        texte = c
+    elif isinstance(c, list):
+        texte = next((x.get("text", "") for x in c if isinstance(x, dict) and x.get("type") == "text" and x.get("text", "").strip()), "")
+    texte = texte.strip()
+    if texte and not texte.startswith(TECHNIQUE):
         n += 1
 print(n)
 EOF
@@ -55,7 +69,8 @@ fi
 
 cat >&2 <<EOF
 Vive mémoire : cette discussion compte $nb demandes de Baptiste et aucune synthèse récente.
-Avant de terminer, exécute la skill « vive-memoire » (compte rendu de session, décisions D-xxx,
+Avant de terminer, exécute la skill « vive-memoire » (si elle n'est pas chargée : lire
+claude-macos-app/docs/context/skills/vive-memoire/SKILL.md) — compte rendu de session, décisions D-xxx,
 backlog, skills à faire grossir, ponts IA, bilan interactif publié, commit + push), puis écris
 « $session_id $nb » dans $stamp
 EOF
