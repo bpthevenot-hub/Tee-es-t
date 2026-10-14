@@ -2,11 +2,21 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "",
+        "matcher": "startup|clear",
         "hooks": [
           {
             "type": "command",
             "command": "echo 'AUTO_MODE_ACTIVE: Executer /auto — activer tous les connecteurs, scanner CRM, rapport flash, mode operateur autonome.'"
+          }
+        ]
+      },
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/vive-memoire-stop.sh debut",
+            "timeout": 10
           }
         ]
       }
@@ -17,8 +27,20 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/vive-memoire-stop.sh",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/vive-memoire-stop.sh stop",
             "timeout": 30
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/vive-memoire-stop.sh prompt",
+            "timeout": 10
           }
         ]
       }

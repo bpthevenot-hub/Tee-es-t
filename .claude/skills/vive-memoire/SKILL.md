@@ -5,7 +5,7 @@ description: Mémoire vive de fin de discussion — à exécuter automatiquement
 
 # Vive mémoire
 
-Baptiste (SNB Consulting, consultant IA, travaille seul) veut que **chaque discussion importante laisse une trace exploitable** par la suivante — quel que soit le modèle, l'outil ou la machine — et qu'il n'ait **jamais à redemander** ce qu'il a déjà demandé. Réponses en français, directes.
+Baptiste (consultant IA, SNB Consulting) veut que **chaque discussion importante laisse une trace exploitable** par la suivante, quel que soit le modèle, l'outil ou la machine, et qu'il n'ait **jamais à redemander** ce qu'il a déjà demandé. Réponses en français, directes.
 
 ## 0. Où vit la mémoire
 
@@ -17,22 +17,34 @@ Baptiste (SNB Consulting, consultant IA, travaille seul) veut que **chaque discu
 | Reprise Claude / pont ChatGPT | `claude-macos-app/docs/context/claude-handoff.md`, `chatgpt-handoff.md` | pont entre IA |
 | **Comptes rendus de session** | `claude-macos-app/docs/context/sessions/AAAA-MM-JJ-sujet.md` | une discussion = un fichier |
 | **Candidats skills / agents / commandes** | `claude-macos-app/docs/context/skills-candidats.md` | liste qui grossit, à promouvoir |
-| **Bilans interactifs** | `claude-macos-app/docs/context/bilans/AAAA-MM-JJ-sujet.html` + artifact publié | résultat visible, ludique |
-| Skills vivantes | `Tee-es-t/.claude/skills/<nom>/SKILL.md` (suivi par git malgré `.gitignore` : `git add -f`) | chargées à chaque session sur le repo |
+| **Bilans interactifs** | `claude-macos-app/docs/context/bilans/AAAA-MM-JJ-sujet.html` + artifact privé | résultat visible, ludique |
+| Skills vivantes | `Tee-es-t/.claude/skills/<nom>/` (suivi par git : `.claude/*` avec exceptions) | chargées à chaque session sur le dépôt |
+| Hooks | `Tee-es-t/.claude/hooks/` et `claude-macos-app/.claude/hooks/` (copies identiques) | voir § 1 |
 
-Si `claude-macos-app` n'est pas dans la session : l'attacher (`add_repo bpthevenot-hub/claude-macos-app`) ; à défaut, écrire la synthèse dans `Tee-es-t/docs/context-miroir/` et le signaler.
+`claude-macos-app` est **privé** ; `Tee-es-t` est **public** : jamais de mémoire dans Tee-es-t. Si `claude-macos-app` n'est pas dans la session, l'attacher (`add_repo bpthevenot-hub/claude-macos-app`) ; à défaut, écrire la synthèse dans le scratchpad et la publier en artifact privé, avec la mention « à rapatrier dans claude-macos-app ».
 
-## 1. Quand
+Dans les commandes ci-dessous, `$SKILL` est le dossier de ce fichier (Tee-es-t `.claude/skills/vive-memoire`, ou la copie de secours `claude-macos-app/docs/context/skills/vive-memoire`, ou `~/.claude/skills/vive-memoire` sur le Mac) et `$MEM` le dossier `claude-macos-app/docs/context`.
 
-- **Automatiquement** : le hook Stop (`.claude/hooks/vive-memoire-stop.sh`) bloque la fin de tour d'une discussion substantielle (≥ 4 messages de Baptiste) tant que la synthèse n'a pas été faite, puis toutes les ~8 nouvelles demandes. Il donne l'identifiant de session à tamponner.
+## 1. Quand, et ce qui l'impose réellement (D-019)
+
 - **Sur demande** : « vive mémoire », « fais le point », « bilan », « ménage général ».
 - **Jamais** pour une question triviale ou une session sans décision ni livrable.
+- **Automatiquement**, selon l'endroit (documentation Claude Code vérifiée le 14/10/2026) :
+
+| Session | Ce qui s'applique |
+|---|---|
+| Mac, CLI ou desktop, après `bash Tee-es-t/.claude/hooks/installe-mac.sh` | hooks **utilisateur** : toutes les sessions locales, quel que soit le dossier ; skill copiée dans `~/.claude/skills/` |
+| Locale ouverte dans un des deux dépôts, sans installation utilisateur | hooks du dépôt (`.claude/settings.json`) |
+| Cloud ouverte sur **un seul** dépôt | hooks du dépôt |
+| Cloud ouverte sur **plusieurs** dépôts | **aucun hook** (ni dépôt, ni plugin, ni réglages utilisateur) : seule la consigne des `CLAUDE.md` vaut ; Claude doit appliquer cette skill de lui-même |
+
+Hooks (Python 3.8+, aucune autre dépendance, logique dans `vive_memoire.py`) : **Stop** demande la synthèse quand la discussion compte ≥ 4 demandes humaines (champ `origin` du transcript ; notifications, webhooks, tâches planifiées exclus), puis toutes les ~8 nouvelles demandes ; au plus 3 relances, puis la fin est autorisée et une **dette** est notée ; **SessionStart** rappelle les dettes des sessions précédentes ; **UserPromptSubmit** note les demandes pas encore écrites au transcript. Le hook ne bloque jamais sur une erreur et se met en pause quand du travail tourne en arrière-plan. État : `~/.claude/vive-memoire/<session>.json`. Banc : `python3 .claude/hooks/teste_vive_memoire.py`.
 
 ## 2. Procédure (dans l'ordre, sans sauter d'étape)
 
 1. **Lire** (protocole D-004) : `claude-handoff.md` → `next-actions.md` → 10 dernières entrées de `decision-log.md` → `skills-candidats.md`. Ne rien réécrire de mémoire : tout vient du transcript, de git et des outils.
-2. **Compte rendu de session** → `sessions/AAAA-MM-JJ-sujet.md` (≤ 1 page) : Contexte · Ce qui a été livré (liens : PR, URLs, artifacts, fichiers) · Décisions prises (→ D-xxx) · Ce qui reste (→ next-actions) · Ce que Baptiste n'aura plus à redemander · Pièges rencontrés et parades (ex. réseau bloqué, API tronquée, hook).
-3. **Journaliser** : chaque décision tranchée → nouvelle entrée `D-xxx` (date, source, statut, contexte, décision, conséquences). Jamais d'effacement ; une décision remplacée est marquée `superseded-by`. **Avant de numéroter**, relire la fin de `decision-log.md` sur `main` et sur la branche distante (`git fetch`) : des sessions parallèles écrivent aussi (collision D-014 du 14/10, résolue en D-017).
+2. **Compte rendu de session** → `$MEM/sessions/AAAA-MM-JJ-sujet.md` (≤ 1 page). En tête : `Session : <session_id>` et `Demandes : <nombre>` (ce qui permet au hook de reconnaître une synthèse faite, même dans un nouveau conteneur). Puis : Contexte · Ce qui a été livré (liens : PR, URLs, artifacts, fichiers) · Décisions prises (→ D-xxx) · Ce qui reste (→ next-actions) · Ce que Baptiste n'aura plus à redemander · Pièges rencontrés et parades. Si le compte rendu de cette session existe déjà, le compléter au lieu d'en écrire un second.
+3. **Journaliser** : chaque décision tranchée → nouvelle entrée `D-xxx` (date, source, statut, contexte, décision, conséquences). Jamais d'effacement ; une décision remplacée est marquée `superseded-by`. **Avant de numéroter une décision ou un Sync ID**, `git fetch` puis relire la fin de `decision-log.md` sur `main` **et** sur la branche distante : des sessions parallèles écrivent aussi. Une entrée déjà publiée sur `main` garde son numéro ; c'est la plus récente, encore sur une branche, qui change (collision D-014 du 14/10, cf. D-019).
 4. **Backlog** : mettre à jour `next-actions.md` (P0 du haut = tâche courante ; cocher ce qui est fait, dater).
 5. **Faire grossir les skills** — le cœur de la demande :
    - repérer dans la session ce qui a été demandé **plus d'une fois**, ou ce qui a nécessité une longue explication, ou une procédure que l'on refera (pipeline de build, banc de test, restauration, déploiement, revue) ;
@@ -40,10 +52,14 @@ Si `claude-macos-app` n'est pas dans la session : l'attacher (`add_repo bptheven
    - **promouvoir** en skill réelle (`Tee-es-t/.claude/skills/<nom>/SKILL.md`, `git add -f`) dès qu'un candidat a servi 2 fois ou que Baptiste l'a demandé ; enrichir une skill existante plutôt qu'en créer une proche (`chaine-produit`, `atelier-design`, `copilote-freelance`, `auto`, `commercial-agent`…) ;
    - proposer de même des **agents** (`.claude/agents/`) ou des **commandes** quand une tâche est répétitive et bornée ;
    - rappeler à Baptiste qu'une skill utile partout doit aussi être **téléversée dans ses skills claude.ai** (le fichier `SKILL.md` suffit) — on ne peut pas le faire à sa place.
-6. **Pont vers les autres IA** : régénérer `claude-handoff.md` (§2 tâches en cours, §3 état des dépôts, §8 prochaines actions) et `chatgpt-handoff.md` (résumé neutre, sans secret, lisible par n'importe quel assistant). **Write-back Notion (D-017, obligatoire)** : ajouter en fin de la page « SNB Center — Control Plane & Reprise totale » (`notion-fetch` id `3d8fd451-0cd1-81d2-a56f-ef99964e85e1`) une entrée « Journal de vérification — Claude Code — <date> » au format des entrées précédentes : faits vérifiés avec sources (SHA, déploiements, PR), statut de chaque élément, limites, prochaine action, et ce qui n'a pas été modifié. Si le connecteur Notion manque, le dire dans la réponse.
-7. **Bilan interactif** (obligatoire — Baptiste ne lit pas des pages) : une page HTML autonome, ludique et scannable en 2 minutes, à partir de `bilan-template.html` : ligne du temps de la session, cartes « livré / décidé / à faire / à ne plus demander », liens cliquables, compteur de skills, et un bloc « ce que tu peux maintenant me demander en un mot ». Le plus simple : écrire une spec JSON (titre, date, listes `livre`/`decide`/`attente`/`mots`/`temps`, `pieges`) puis `python3 .claude/skills/vive-memoire/genere-bilan.py spec.json docs/context/bilans/AAAA-MM-JJ-sujet.html` — les compteurs sont déduits, le script refuse une page dont un placeholder reste vide. Vérifier ensuite avec `node .claude/skills/vive-memoire/teste-bilan.mjs <bilan.html> <dossier-captures-hors-dépôt>` (onglets, cases, quiz, 390 px, thème sombre, 0 erreur JS). La sauver dans `bilans/` et la **publier en artifact** (titre court, nom stable) ; donner le lien en une ligne.
-8. **Commit + push** : `claude-macos-app` → PR en session cloud (D-011) ou commit direct `main` en local (D-006) ; `Tee-es-t` → branche + PR (jamais `main`). Messages de commit en français, sans identifiant de modèle.
-9. **Tamponner** : écrire `<session_id> <nombre de messages>` dans `.claude/.vive-memoire.stamp` du repo courant (valeurs données par le hook) pour que le hook cesse de bloquer.
+6. **Pont vers les autres IA** : régénérer `claude-handoff.md` (§2 tâches en cours, §3 état des dépôts, §8 prochaines actions) et `chatgpt-handoff.md` (résumé neutre, sans secret ni donnée personnelle, lisible par n'importe quel assistant). **Write-back Notion (D-014, obligatoire)** : ajouter en fin de la page « SNB Center — Control Plane & Reprise totale » (`notion-fetch` id `3d8fd451-0cd1-81d2-a56f-ef99964e85e1`) une entrée « Journal de vérification — Claude Code — <date> » au format des entrées précédentes : faits vérifiés avec sources (SHA, déploiements, PR), statut de chaque élément, limites, prochaine action, et ce qui n'a pas été modifié. Si le connecteur Notion manque, le dire dans la réponse.
+7. **Bilan interactif** (obligatoire : Baptiste ne lit pas des pages). Écrire une spec JSON (clés et règles en tête de `genere-bilan.py` : `titre`, `titre_court` de 2 à 4 mots, `date`, listes `livre`, `decide`, `attente`, `mots`, `quiz` avec `bonne` = index à partir de 0, `temps`, `pieges`), puis :
+   - page versionnée : `python3 "$SKILL/genere-bilan.py" spec.json "$MEM/bilans/AAAA-MM-JJ-sujet.html"` (refusée si le dossier `bilans/` n'est pas à côté d'un `decision-log.md`) ;
+   - page à publier : `python3 "$SKILL/genere-bilan.py" --artifact spec.json <scratchpad>/bilan.html`, publiée en **artifact** (republier le même fichier garde l'URL) ;
+   - vérifier : `node "$SKILL/teste-bilan.mjs" <bilan.html> <scratchpad>/captures` (onglets au clic et aux flèches, cases, quiz, 390 px sur chaque onglet, thème sombre, 0 erreur JS) ;
+   - donner le lien en une ligne.
+8. **Commit + push** : `claude-macos-app` → PR en session cloud (D-011) ou commit direct `main` en local (D-006) ; `Tee-es-t` → branche + PR (jamais `main`). Vérifier d'abord que la PR visée n'est pas déjà mergée ; sinon en ouvrir une nouvelle. Messages de commit en français, sans identifiant de modèle.
+9. **Tamponner** : `python3 <dossier des hooks>/vive_memoire.py tamponne <session_id>` (la commande exacte, chemin compris, figure dans le message du hook ; l'identifiant est aussi dans `$CLAUDE_CODE_SESSION_ID`). Elle enregistre la synthèse et efface la dette de la session.
 10. **Répondre** en 6 lignes maximum : lien du bilan, décisions D-xxx, skills créées/enrichies, ce qui attend Baptiste.
 
 ## 3. Règles

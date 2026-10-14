@@ -7,18 +7,23 @@ Usage :
 
 La spec JSON :
 {
-  "titre": "phrase-titre affichée en h1", "titre_court": "Nom court de l'onglet (2-4 mots)",
+  "titre": "phrase-titre affichée en h1", "titre_court": "Nom de l'onglet, 2 à 4 mots (obligatoire)",
   "date": "14 octobre 2026", "duree": "12 demandes", "modele": "Claude Code (cloud)", "nb_skills": 2,
   "livre":   [{"titre": "…", "texte": "…", "lien": "https://…", "lien_texte": "ouvrir"}],
   "decide":  [{"titre": "D-015 — …", "texte": "…"}],
   "attente": [{"titre": "…", "texte": "…", "lien": "…"}],          # cochables, mémorisés dans le navigateur
   "mots":    [{"mot": "déploie Relève", "sens": "ce que ça déclenche"}],  # un clic copie
-  "quiz":    [{"question": "…", "choix": ["a", "b", "c"], "bonne": 1, "explication": "…"}],
+  "quiz":    [{"question": "…", "choix": ["a", "b", "c"], "bonne": 1, "explication": "…"}],  # bonne : index à partir de 0
   "temps":   [{"quand": "13 oct.", "quoi": "…"}],
   "pieges":  "réseau du conteneur : WebFetch bloqué"
 }
-Les compteurs sont déduits des listes. Le script refuse une page dont un placeholder reste vide.
+Les compteurs sont déduits des listes. Le script refuse : titre, titre_court ou date vides, titre_court de plus
+de 4 mots, lien qui n'est pas en https://, quiz mal formé, et un bilan écrit dans un dossier « bilans/ » qui n'est
+pas voisin d'un decision-log.md (évite d'écrire la mémoire dans le mauvais dépôt).
 """
+from __future__ import annotations
+
+import hashlib
 import html
 import json
 import re
@@ -32,31 +37,60 @@ def e(s) -> str:
     return html.escape(str(s), quote=True)
 
 
+def refuse(message: str) -> None:
+    sys.exit('spec refusée : ' + message)
+
+
 def lien(c: dict) -> str:
     if not c.get('lien'):
         return ''
-    return f' <a href="{e(c["lien"])}" target="_blank" rel="noopener">{e(c.get("lien_texte", "ouvrir"))} ↗</a>'
-
-
-def carte(c: dict, etat: str, libelle: str, coche_id: str | None = None) -> str:
-    coche = ''
-    if coche_id:
-        coche = f'<label class="coche" for="{coche_id}"><input type="checkbox" id="{coche_id}"> fait</label>'
-    return (f'<article class="carte"><span class="etat {etat}">{e(libelle)}</span>'
-            f'<h3>{e(c["titre"])}</h3><p>{e(c.get("texte", ""))}{lien(c)}</p>{coche}</article>')
+    url = str(c['lien']).strip()
+    if not re.match(r'^https://', url):
+        refuse(f'lien non https dans « {c.get("titre", "?")} » : {url[:60]}')
+    return f' <a href="{e(url)}" target="_blank" rel="noopener">{e(c.get("lien_texte", "ouvrir"))} ↗</a>'
 
 
 def slug(s: str) -> str:
-    s = re.sub(r'[^a-z0-9]+', '-', s.lower())
-    return s.strip('-')[:40] or 'x'
+    s = re.sub(r'[^a-z0-9]+', '-', str(s).lower())
+    return s.strip('-')[:30] or 'x'
+
+
+def carte(c: dict, etat: str, libelle: str, coche_id: str = '') -> str:
+    if not str(c.get('titre') or '').strip():
+        refuse(f'carte sans titre dans « {libelle} »')
+    titre_id = ''
+    coche = ''
+    if coche_id:
+        titre_id = f' id="t-{coche_id}"'
+        coche = (f'<label class="coche" for="{coche_id}"><input type="checkbox" id="{coche_id}" aria-describedby="t-{coche_id}"> '
+                 f'fait<span class="sr-only"> : {e(c["titre"])}</span></label>')
+    return (f'<article class="carte"><span class="etat {etat}">{e(libelle)}</span>'
+            f'<h3{titre_id}>{e(c["titre"])}</h3><p>{e(c.get("texte", ""))}{lien(c)}</p>{coche}</article>')
+
+
+def ids_cases(cartes: list) -> list:
+    vus, ids = {}, []
+    for c in cartes:
+        base = 'fait-' + slug(c.get('titre', '')) + '-' + hashlib.sha1(str(c.get('titre', '')).encode('utf-8')).hexdigest()[:6]
+        vus[base] = vus.get(base, 0) + 1
+        ids.append(base if vus[base] == 1 else f'{base}-{vus[base]}')
+    return ids
 
 
 def question(q: dict, i: int) -> str:
+    choix, bonne = q.get('choix'), q.get('bonne')
+    if not str(q.get('question') or '').strip() or not isinstance(choix, list) or len(choix) < 2:
+        refuse(f'question {i + 1} : texte vide ou moins de deux choix')
+    if not isinstance(bonne, int) or isinstance(bonne, bool) or not 0 <= bonne < len(choix):
+        refuse(f'question {i + 1} : « bonne » doit être un index de 0 à {len(choix) - 1}')
     boutons = ''.join(
-        f'<button type="button"{" data-juste" if j == q["bonne"] else ""}>{e(c)}</button>'
-        for j, c in enumerate(q['choix']))
+        f'<button type="button"{" data-juste" if j == bonne else ""}>{e(c)}</button>' for j, c in enumerate(choix))
     return (f'<article class="question" id="q-{i}"><h3>{e(q["question"])}</h3>'
-            f'<div class="choix">{boutons}</div><p class="explication" hidden>{e(q.get("explication", ""))}</p></article>')
+            f'<div class="choix" role="group" aria-label="Réponses">{boutons}</div><p class="explication" hidden>{e(q.get("explication", ""))}</p></article>')
+
+
+def vide(texte: str) -> str:
+    return f'<p class="vide">{e(texte)}</p>'
 
 
 def main(argv: list[str]) -> None:
@@ -65,37 +99,58 @@ def main(argv: list[str]) -> None:
     if len(args) != 2:
         sys.exit(__doc__)
     spec = json.loads(Path(args[0]).read_text(encoding='utf-8'))
+    if not isinstance(spec, dict):
+        refuse('la spec doit être un objet JSON')
+    for cle in ('titre', 'titre_court', 'date'):
+        if not isinstance(spec.get(cle), str) or not spec[cle].strip():
+            refuse(f'« {cle} » manquant ou vide')
+    if len(spec['titre_court'].split()) > 4:
+        refuse('« titre_court » doit tenir en 2 à 4 mots (nom de l\'onglet et de la galerie)')
+    try:
+        nb_skills = int(spec.get('nb_skills', 0))
+    except (TypeError, ValueError):
+        refuse('« nb_skills » doit être un entier')
     gabarit = (ICI / 'bilan-template.html').read_text(encoding='utf-8')
     attente = spec.get('attente', [])
+    pieges = spec.get('pieges', '')
+    pieges = ' · '.join(map(str, pieges)) if isinstance(pieges, list) else str(pieges)
+    ids = ids_cases(attente)
     valeurs = {
         'TITRE': e(spec['titre']),
-        'TITRE_COURT': e(spec.get('titre_court', spec['titre'])),
+        'TITRE_COURT': e(spec['titre_court']),
+        'BILAN_ID': hashlib.sha1((spec['date'] + '|' + spec['titre']).encode('utf-8')).hexdigest()[:10],
         'DATE': e(spec['date']),
         'DUREE': e(spec.get('duree', '')),
         'MODELE': e(spec.get('modele', '')),
         'NB_LIVRES': str(len(spec.get('livre', []))),
         'NB_DECISIONS': str(len(spec.get('decide', []))),
-        'NB_SKILLS': str(spec.get('nb_skills', 0)),
+        'NB_SKILLS': str(nb_skills),
         'NB_ATTENTE': str(len(attente)),
         'NB_QUIZ': str(len(spec.get('quiz', []))),
-        'CARTES_LIVRE': ''.join(carte(c, 'ok', 'livré') for c in spec.get('livre', [])),
-        'CARTES_DECIDE': ''.join(carte(c, 'decision', 'décidé') for c in spec.get('decide', [])),
-        'CARTES_ATTENTE': ''.join(carte(c, 'attente', 'à toi', f'fait-{i}-{slug(c["titre"])}') for i, c in enumerate(attente)),
+        'CARTES_LIVRE': ''.join(carte(c, 'ok', 'livré') for c in spec.get('livre', [])) or vide('Rien de livré cette fois.'),
+        'CARTES_DECIDE': ''.join(carte(c, 'decision', 'décidé') for c in spec.get('decide', [])) or vide('Aucune décision cette fois.'),
+        'CARTES_ATTENTE': ''.join(carte(c, 'attente', 'à toi', i) for c, i in zip(attente, ids)) or vide('Rien ne t\'attend.'),
         'MOTS': ''.join(f'<button type="button" class="mot" data-mot="{e(m["mot"])}">{e(m["mot"])}<small>{e(m.get("sens", ""))}</small></button>'
-                        for m in spec.get('mots', [])),
-        'QUIZ': ''.join(question(q, i) for i, q in enumerate(spec.get('quiz', []))) or '<p>Pas de quiz pour cette session.</p>',
-        'LIGNE_TEMPS': ''.join(f'<li><time>{e(t["quand"])}</time>{e(t["quoi"])}</li>' for t in spec.get('temps', [])),
-        'PIEGES': e(spec.get('pieges', '')),
+                        for m in spec.get('mots', [])) or vide('Pas de nouveau raccourci.'),
+        'QUIZ': ''.join(question(q, i) for i, q in enumerate(spec.get('quiz', []))) or vide('Pas de quiz pour cette session.'),
+        'LIGNE_TEMPS': ''.join(f'<li><time>{e(x["quand"])}</time>{e(x["quoi"])}</li>' for x in spec.get('temps', [])) or '<li>Pas de jalon.</li>',
+        'PIEGES': e(pieges),
     }
-    page = gabarit
-    for cle, val in valeurs.items():
-        page = page.replace('{{' + cle + '}}', val)
-    reste = re.findall(r'\{\{[A-Z_]+\}\}', page)
-    if reste:
-        sys.exit('placeholders non remplis : ' + ', '.join(sorted(set(reste))))
+    # Une seule passe sur le gabarit : le contenu inséré n'est jamais relu comme du gabarit.
+    inconnus = sorted(set(re.findall(r'\{\{([A-Z_]+)\}\}', gabarit)) - set(valeurs))
+    if inconnus:
+        sys.exit('placeholders du gabarit sans valeur : ' + ', '.join(inconnus))
+    page = re.sub(r'\{\{([A-Z_]+)\}\}', lambda m: valeurs[m.group(1)], gabarit)
     if not artifact:
         page = '<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n</head>\n<body>\n' + page + '\n</body>\n</html>\n'
-    Path(args[1]).write_text(page, encoding='utf-8')
+    sortie = Path(args[1])
+    if sortie.parent.name == 'bilans':
+        if not (sortie.parent.parent / 'decision-log.md').exists():
+            refuse(f'{sortie.parent} n\'est pas le dossier bilans/ de la mémoire (aucun decision-log.md à côté) : mauvais dépôt ?')
+        sortie.parent.mkdir(exist_ok=True)
+    else:
+        sortie.parent.mkdir(parents=True, exist_ok=True)
+    sortie.write_text(page, encoding='utf-8')
     print(f'bilan écrit : {args[1]} ({len(page)} caractères, {"artifact" if artifact else "autonome"})')
 
 

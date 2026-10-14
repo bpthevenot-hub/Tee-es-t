@@ -36,10 +36,12 @@
 
 La mémoire de travail de Baptiste vit dans `bpthevenot-hub/claude-macos-app/docs/context/`
 (décisions `D-xxx`, backlog, comptes rendus de session, candidats skills, bilans). Toute
-discussion substantielle se termine par la skill **`vive-memoire`** (`.claude/skills/vive-memoire/`) :
-le hook Stop (`.claude/hooks/vive-memoire-stop.sh`) la rappelle automatiquement. Elle fait
-grossir les skills/agents/commandes à partir des demandes récurrentes et publie un bilan
-interactif. Les fichiers de `.claude/` sont versionnés malgré le `.gitignore` : `git add -f`.
+discussion substantielle se termine par la skill **`vive-memoire`** (`.claude/skills/vive-memoire/`).
+Elle fait grossir les skills/agents/commandes à partir des demandes récurrentes et publie un
+bilan interactif. Le hook Stop (`.claude/hooks/`) la rappelle dans une session ouverte sur ce
+seul dépôt ou sur le Mac (`bash .claude/hooks/installe-mac.sh`). **En session cloud ouverte
+sur plusieurs dépôts, aucun hook ne se charge : applique la skill de toi-même** (D-019).
+`.claude/settings.json`, `.claude/hooks/` et `.claude/skills/` sont versionnés ; le reste de `.claude/` est ignoré.
 
 ## ROLE
 

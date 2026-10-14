@@ -7,7 +7,7 @@
   /* Carnet de bord : un en-tête-compteur, des onglets, des cartes cochables, un quiz. Une seule couleur d'accent. */
   :root {
     --fond: #edf0ec; --carte: #fbfcfa; --encre: #17201b; --sourd: #56635b; --filet: #d3dad4;
-    --accent: #0b6e4f; --sur-accent: #ffffff; --attention: #a8661a; --decide: #4f4482; --ok: #1d7a46;
+    --accent: #0b6e4f; --sur-accent: #ffffff; --attention: #94570f; --decide: #4f4482; --ok: #1d7a46;
     --titre: 'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
     --texte: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -22,6 +22,11 @@
   body { margin: 0; background: var(--fond); color: var(--encre); font: 16px/1.55 var(--texte);
     padding-block: 40px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   main { max-width: 980px; margin: 0 auto; display: grid; gap: 28px; }
+  main > * { min-width: 0; }
+  h1, .carte h3, .mot, .ligne li, .choix button, .question h3, footer, .carte p { overflow-wrap: anywhere; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .vide { color: var(--sourd); margin: 0; }
+  section[role="tabpanel"]:focus-visible { outline: 2px solid var(--attention); outline-offset: 4px; border-radius: 6px; }
   .sur { font: 500 12px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--sourd); margin: 0 0 10px; }
   h1 { font: 700 clamp(30px, 5.4vw, 50px)/1.05 var(--titre); letter-spacing: -.015em; margin: 0; text-wrap: balance; max-width: 22ch; }
   .date { color: var(--sourd); margin: 10px 0 0; font-family: var(--mono); font-size: 13px; }
@@ -45,7 +50,7 @@
   .carte a { color: var(--accent); font-weight: 700; text-underline-offset: 3px; }
   .etat { justify-self: start; font: 500 10.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; padding: 4px 8px; border-radius: 4px; border: 1px solid currentColor; }
   .etat.ok { color: var(--ok); } .etat.decision { color: var(--decide); } .etat.attente { color: var(--attention); }
-  .carte.faite { opacity: .55; } .carte.faite h3 { text-decoration: line-through; }
+  .carte.faite h3 { text-decoration: line-through; color: var(--sourd); }
   .coche { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; margin-top: 4px; }
   .coche input { width: 18px; height: 18px; accent-color: var(--attention); }
   .mots { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -64,13 +69,14 @@
   .choix button { border: 1px solid var(--filet); background: var(--fond); color: var(--encre); border-radius: 8px; padding: 8px 12px; font: 500 14px/1.3 var(--texte); cursor: pointer; text-align: left; }
   .choix button.juste { background: var(--ok); border-color: var(--ok); color: var(--sur-accent); }
   .choix button.faux { border-color: var(--attention); color: var(--attention); }
+  .choix button .marque { font-size: 12px; font-weight: 700; margin-left: 6px; }
   .explication { margin: 0; color: var(--sourd); font-size: 14px; }
   .score { font: 500 13px/1 var(--mono); color: var(--sourd); }
   footer { font-size: 13px; color: var(--sourd); border-top: 1px solid var(--filet); padding-top: 16px; }
   footer code { font-family: var(--mono); font-size: 12px; }
   @media (prefers-reduced-motion: reduce) { .progres i { transition: none; } }
 </style>
-<main>
+<main lang="fr" data-bilan="{{BILAN_ID}}">
   <header>
     <p class="sur">Vive mémoire · bilan de session</p>
     <h1>{{TITRE}}</h1>
@@ -93,27 +99,27 @@
     <button role="tab" id="o-temps" aria-selected="false" aria-controls="t-temps" tabindex="-1">Ligne du temps</button>
   </div>
 
-  <section id="t-livre" role="tabpanel" aria-labelledby="o-livre"><div class="cartes">{{CARTES_LIVRE}}</div></section>
-  <section id="t-decide" role="tabpanel" aria-labelledby="o-decide" hidden><div class="cartes">{{CARTES_DECIDE}}</div></section>
-  <section id="t-attente" role="tabpanel" aria-labelledby="o-attente" hidden>
+  <section id="t-livre" tabindex="0" role="tabpanel" aria-labelledby="o-livre"><div class="cartes">{{CARTES_LIVRE}}</div></section>
+  <section id="t-decide" tabindex="0" role="tabpanel" aria-labelledby="o-decide" hidden><div class="cartes">{{CARTES_DECIDE}}</div></section>
+  <section id="t-attente" tabindex="0" role="tabpanel" aria-labelledby="o-attente" hidden>
     <div class="cartes">{{CARTES_ATTENTE}}</div>
   </section>
-  <section id="t-mots" role="tabpanel" aria-labelledby="o-mots" hidden>
+  <section id="t-mots" tabindex="0" role="tabpanel" aria-labelledby="o-mots" hidden>
     <p>Ce que tu peux maintenant me demander sans rien détailler. Un clic copie la phrase.</p>
     <div class="mots">{{MOTS}}</div>
     <p class="score" id="copie-etat" aria-live="polite"></p>
   </section>
-  <section id="t-quiz" role="tabpanel" aria-labelledby="o-quiz" hidden>
+  <section id="t-quiz" tabindex="0" role="tabpanel" aria-labelledby="o-quiz" hidden>
     <div class="quiz">{{QUIZ}}</div>
     <p class="score" id="score" aria-live="polite"></p>
   </section>
-  <section id="t-temps" role="tabpanel" aria-labelledby="o-temps" hidden><ul class="ligne">{{LIGNE_TEMPS}}</ul></section>
+  <section id="t-temps" tabindex="0" role="tabpanel" aria-labelledby="o-temps" hidden><ul class="ligne">{{LIGNE_TEMPS}}</ul></section>
 
   <footer>Mémoire : <code>claude-macos-app/docs/context</code> · skill <code>vive-memoire</code> · {{PIEGES}}</footer>
 </main>
 <script>
   (function () {
-    var cle = 'bilan:' + document.title
+    var cle = 'bilan:' + (document.querySelector('main').getAttribute('data-bilan') || document.title)
     function lire() { try { return JSON.parse(localStorage.getItem(cle) || '{}') } catch (e) { return {} } }
     function ecrire(v) { try { localStorage.setItem(cle, JSON.stringify(v)) } catch (e) {} }
 
@@ -177,9 +183,18 @@
           var juste = b.hasAttribute('data-juste')
           if (juste) bons++
           b.classList.add(juste ? 'juste' : 'faux')
-          boutons.forEach(function (x) { if (x.hasAttribute('data-juste')) x.classList.add('juste'); x.setAttribute('aria-disabled', 'true') })
+          b.setAttribute('aria-pressed', 'true')
+          var bonne = null
+          boutons.forEach(function (x) {
+            if (x.hasAttribute('data-juste')) { x.classList.add('juste'); bonne = x }
+            x.setAttribute('aria-disabled', 'true')
+          })
+          function marque(x, texte) { var s = document.createElement('span'); s.className = 'marque'; s.textContent = texte; x.appendChild(s) }
+          if (bonne) marque(bonne, '✓ bonne réponse')
+          if (!juste) marque(b, '✗ ta réponse')
           q.querySelector('.explication').hidden = false
-          document.getElementById('score').textContent = bons + ' / ' + repondues + (repondues === questions.length ? (bons === questions.length ? ' — tout est en tête.' : ' — la réponse est dans la carte ouverte.') : '')
+          var verdict = juste ? 'Juste. ' : 'Faux. La bonne réponse : ' + (bonne ? bonne.firstChild.textContent : '?') + '. '
+          document.getElementById('score').textContent = verdict + bons + ' / ' + repondues + (repondues === questions.length ? (bons === questions.length ? ' : tout est en tête.' : ' : la réponse est dans la carte ouverte.') : '')
         })
       })
     })
