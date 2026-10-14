@@ -1,0 +1,25 @@
+{
+  "name": "releve-site",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Releve - clinique digitale du soignant (demonstration, proposition SNB Consulting)",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "15.5.20",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.2",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "tailwindcss": "4.3.2",
+    "typescript": "^5.8.0"
+  }
+}

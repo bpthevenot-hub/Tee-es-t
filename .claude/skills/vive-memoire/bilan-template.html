@@ -1,0 +1,78 @@
+<title>Bilan — {{SUJET}}</title>
+<style>
+  :root { --fond:#f6f4ee; --carte:#fff; --encre:#1c2328; --sourdine:#5f6b73; --filet:rgba(28,35,40,.12); --accent:#0e5a63; --vif:#e4572e; --ok:#1f7a4d; --attente:#b07a12; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --fond:#11181c; --carte:#182127; --encre:#e8eef0; --sourdine:#97a6ad; --filet:rgba(232,238,240,.14); --accent:#6fc2cc; --vif:#f0825c; --ok:#6fd49a; --attente:#e3b15a; } }
+  :root[data-theme="dark"] { --fond:#11181c; --carte:#182127; --encre:#e8eef0; --sourdine:#97a6ad; --filet:rgba(232,238,240,.14); --accent:#6fc2cc; --vif:#f0825c; --ok:#6fd49a; --attente:#e3b15a; }
+  :root[data-theme="light"] { --fond:#f6f4ee; --carte:#fff; --encre:#1c2328; --sourdine:#5f6b73; --filet:rgba(28,35,40,.12); --accent:#0e5a63; --vif:#e4572e; --ok:#1f7a4d; --attente:#b07a12; }
+  body { margin:0; padding:40px 16px 64px; background:var(--fond); color:var(--encre); font-family:-apple-system,system-ui,'Segoe UI',sans-serif; line-height:1.5; }
+  main { max-width:960px; margin:0 auto; }
+  .sur { font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--sourdine); margin:0 0 8px; }
+  h1 { font-family:Georgia,serif; font-size:clamp(28px,5vw,42px); line-height:1.1; margin:0 0 6px; text-wrap:balance; }
+  .date { color:var(--sourdine); margin:0 0 28px; }
+  .compteurs { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin:0 0 32px; }
+  .compteur { background:var(--carte); border:1px solid var(--filet); border-radius:14px; padding:14px 16px; }
+  .compteur b { display:block; font-size:30px; font-variant-numeric:tabular-nums; color:var(--accent); }
+  .compteur span { font-size:12.5px; color:var(--sourdine); }
+  .onglets { display:flex; gap:8px; flex-wrap:wrap; margin:0 0 16px; }
+  .onglets button { border:1px solid var(--filet); background:var(--carte); color:var(--encre); border-radius:999px; padding:8px 14px; font:inherit; font-size:14px; cursor:pointer; }
+  .onglets button[aria-selected="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .onglets button:focus-visible { outline:2px solid var(--vif); outline-offset:2px; }
+  section[hidden] { display:none; }
+  .cartes { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); }
+  .carte { background:var(--carte); border:1px solid var(--filet); border-radius:14px; padding:16px 18px; }
+  .carte h3 { margin:0 0 6px; font-size:16px; }
+  .carte p { margin:0; color:var(--sourdine); font-size:14px; }
+  .carte a { color:var(--accent); }
+  .etat { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; padding:2px 8px; border-radius:999px; margin-bottom:8px; }
+  .etat.ok { background:color-mix(in srgb,var(--ok) 15%,transparent); color:var(--ok); }
+  .etat.attente { background:color-mix(in srgb,var(--attente) 18%,transparent); color:var(--attente); }
+  .etat.decision { background:color-mix(in srgb,var(--accent) 15%,transparent); color:var(--accent); }
+  .ligne { position:relative; padding-left:22px; border-left:2px solid var(--filet); display:grid; gap:14px; }
+  .ligne li { list-style:none; position:relative; }
+  .ligne li::before { content:""; position:absolute; left:-29px; top:6px; width:12px; height:12px; border-radius:50%; background:var(--accent); }
+  .ligne time { font-size:12px; color:var(--sourdine); font-variant-numeric:tabular-nums; }
+  .mots { display:flex; flex-wrap:wrap; gap:8px; }
+  .mots code { background:var(--carte); border:1px solid var(--filet); border-radius:8px; padding:6px 10px; font-size:14px; }
+  .mots small { display:block; color:var(--sourdine); font-size:12px; }
+  footer { margin-top:36px; font-size:12.5px; color:var(--sourdine); }
+</style>
+<main>
+  <p class="sur">Vive mémoire · bilan de session</p>
+  <h1>{{TITRE}}</h1>
+  <p class="date">{{DATE}} · {{DUREE}} · {{MODELE}}</p>
+
+  <div class="compteurs">
+    <div class="compteur"><b>{{NB_LIVRES}}</b><span>livrables</span></div>
+    <div class="compteur"><b>{{NB_DECISIONS}}</b><span>décisions journalisées</span></div>
+    <div class="compteur"><b>{{NB_SKILLS}}</b><span>skills créées / enrichies</span></div>
+    <div class="compteur"><b>{{NB_ATTENTE}}</b><span>en attente de Baptiste</span></div>
+  </div>
+
+  <div class="onglets" role="tablist">
+    <button role="tab" aria-selected="true" aria-controls="t-livre">Livré</button>
+    <button role="tab" aria-selected="false" aria-controls="t-decide">Décidé</button>
+    <button role="tab" aria-selected="false" aria-controls="t-attente">À toi</button>
+    <button role="tab" aria-selected="false" aria-controls="t-mots">Un mot suffit</button>
+    <button role="tab" aria-selected="false" aria-controls="t-temps">Ligne du temps</button>
+  </div>
+
+  <section id="t-livre" role="tabpanel"><div class="cartes">{{CARTES_LIVRE}}</div></section>
+  <section id="t-decide" role="tabpanel" hidden><div class="cartes">{{CARTES_DECIDE}}</div></section>
+  <section id="t-attente" role="tabpanel" hidden><div class="cartes">{{CARTES_ATTENTE}}</div></section>
+  <section id="t-mots" role="tabpanel" hidden>
+    <p>Ce que tu peux maintenant me demander sans rien détailler :</p>
+    <div class="mots">{{MOTS}}</div>
+  </section>
+  <section id="t-temps" role="tabpanel" hidden><ul class="ligne">{{LIGNE_TEMPS}}</ul></section>
+
+  <footer>Mémoire : <code>claude-macos-app/docs/context</code> · skill <code>vive-memoire</code> · {{PIEGES}}</footer>
+</main>
+<script>
+  var onglets = document.querySelectorAll('[role="tab"]')
+  onglets.forEach(function (b) {
+    b.addEventListener('click', function () {
+      onglets.forEach(function (o) { o.setAttribute('aria-selected', 'false'); document.getElementById(o.getAttribute('aria-controls')).hidden = true })
+      b.setAttribute('aria-selected', 'true'); document.getElementById(b.getAttribute('aria-controls')).hidden = false
+    })
+  })
+</script>
