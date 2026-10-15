@@ -41,7 +41,7 @@ try:
 except ImportError:          # hors macOS / Linux : pas de sérialisation, le reste marche
     fcntl = None
 
-VERSION = '3.12'
+VERSION = '3.13'
 SEUIL_MIN = 4        # demandes humaines avant d'exiger une synthèse
 SEUIL_REFRESH = 8    # nouvelles demandes depuis la dernière synthèse (ou libération)
 MAX_RELANCES = 3     # blocages consécutifs avant de laisser finir
@@ -361,12 +361,12 @@ def rapport_durable(session: str):
             continue
         for cr in fichiers:
             try:
-                m = motif.search(cr.read_text(encoding='utf-8', errors='replace'))
+                blocs = list(motif.finditer(cr.read_text(encoding='utf-8', errors='replace')))
                 date = cr.stat().st_mtime
             except OSError:
                 continue
-            if m:
-                trouves.append((date, int(m.group(1)), m.group(2) or ''))
+            if blocs:                          # compte rendu complété : son dernier bloc fait foi
+                trouves.append((date, int(blocs[-1].group(1)), blocs[-1].group(2) or ''))
     if not trouves:
         return -1, 0.0, ''
     recente = max(d for d, _, _ in trouves)
@@ -376,6 +376,25 @@ def rapport_durable(session: str):
 
 def tampon_durable(session: str) -> int:
     return rapport_durable(session)[0]
+
+
+def couvrir_mere(mere: str, herite: int, point: str) -> None:
+    """La synthèse d'une fourche couvre sa mère jusqu'au point de fourche : tampon posé chez la mère (lu,
+    comparé et écrit sous son verrou), ancré au point de fourche pour qu'un /rewind de la mère le ramène ;
+    souple : si ses uuids diffèrent de ceux de la fourche, l'ancre absente ne vaut pas zéro."""
+    f_mere = dossier_etat() / (nom_sur(mere) + '.json')
+    with verrou_session(mere):
+        etat_mere = lire_json(f_mere, {})
+        etat_mere = etat_mere if isinstance(etat_mere, dict) else {}
+        if entier(etat_mere.get('tampon')) < herite:
+            etat_mere.update({'tampon': herite, 'ancre_tampon': point, 'ancre_souple': True, 't_tampon': time.time(),
+                              'couvert': max(entier(etat_mere.get('couvert')), herite)})
+            ecrire_json(f_mere, etat_mere)
+
+
+def abandonnee(a, ancre: str) -> bool:
+    """L'ancre est-elle sur une branche quittée par /rewind (présente au transcript, hors branche active) ?"""
+    return bool(ancre) and a.active is not None and ancre in a.liens and ancre not in a.active
 
 
 def synthese_heritee(mere: str, herite: int, a) -> int:
@@ -392,6 +411,7 @@ def synthese_heritee(mere: str, herite: int, a) -> int:
     chemin = str(etat.get('transcript') or '')            # chemin noté par la mère (nom de fichier libre)
     if not chemin or not os.path.isfile(chemin):
         chemin = trouver_transcript(mere)
+    tampon = min(tampon, entier(etat.get('couvert'), tampon))    # sa couverture effective (après un /rewind chez elle)
     if not ancre or not point or not chemin:
         return min(tampon, herite)
     am = analyser_transcript(chemin)
@@ -462,8 +482,12 @@ def mode_tamponne(session: str, transcript: str) -> int:
         return 1
     a = analyser_transcript(chemin)
     nb, parents = compter(etat, a), a.parents
-    valeur, date, _ = rapport_durable(session)
-    etat.update({'tampon': nb, 'ancre_tampon': a.ancre, 'ancre_souple': False, 't_tampon': time.time(), 'rapport_vu': [valeur, int(date)],
+    valeur, date, ancre_rapport = rapport_durable(session)
+    vus = etat.get('rapports_vus') if isinstance(etat.get('rapports_vus'), list) else []
+    if valeur >= 0 and [valeur, ancre_rapport] not in vus:
+        vus = (vus + [[valeur, ancre_rapport]])[-20:]       # le compte rendu de cette synthèse : déjà connu
+    etat.update({'tampon': nb, 'ancre_tampon': a.ancre, 'ancre_souple': False, 't_tampon': time.time(), 'rapports_vus': vus,
+                 'couvert': nb,
                  'relances': 0, 'date_tampon': time.strftime('%Y-%m-%d %H:%M')})
     ok = ecrire_json(f_etat, etat)
     if ok:                                 # sans tampon écrit, la dette reste pour le rappel suivant
@@ -473,16 +497,7 @@ def mode_tamponne(session: str, transcript: str) -> int:
                 continue                         # (jamais sa propre mère : pas de double verrou)
             effacer_dette_si(mere, lambda d, h=herite, m=mere: entier(d.get('nb'), 0) <= h
                              and dette_dans_fourche(d, m, a.fourches.get(m, '')))
-            f_mere = dossier_etat() / (nom_sur(mere) + '.json')
-            with verrou_session(mere):           # lu, comparé et écrit sous le verrou de la mère
-                etat_mere = lire_json(f_mere, {})
-                etat_mere = etat_mere if isinstance(etat_mere, dict) else {}
-                if entier(etat_mere.get('tampon')) < herite:     # reprise de la mère : déjà couverte jusque-là
-                    # ancré au point de fourche, pour qu'un /rewind de la mère le ramène ; souple : si ses
-                    # uuids diffèrent de ceux de la fourche, l'ancre absente ne vaut pas zéro
-                    etat_mere.update({'tampon': herite, 'ancre_tampon': a.fourches.get(mere, ''), 'ancre_souple': True,
-                                      't_tampon': time.time()})
-                    ecrire_json(f_mere, etat_mere)
+            couvrir_mere(mere, herite, a.fourches.get(mere, ''))
     print(f'Vive mémoire : synthèse enregistrée pour la session {session} ({nb} demandes)'
           + ('' if ok else ' — ATTENTION : état non inscriptible, rien n\'a été écrit') + '.')
     print(f'Inscris aussi, sur trois lignes, « Session : {session} », « Demandes : {nb} » et « Ancre : {a.ancre} » '
@@ -612,34 +627,52 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     souple = bool(etat.get('ancre_souple'))
     actif = couvertes(a, str(etat.get('ancre_tampon') or ''), entier(etat.get('tampon')), souple)
     rapport = -1
-    if valeur >= 0 and [valeur, int(date)] != etat.get('rapport_vu'):
-        if a.ancre:
-            etat['rapport_vu'] = [valeur, int(date)]
-            if valeur > actif:
-                # ancre du compte rendu : sa ligne « Ancre » si elle est au transcript, sinon l'entrée écrite
-                # juste avant lui (un compte rendu d'avant un /rewind ne couvre pas les demandes de remplacement)
-                ancre_r = ancre_rapport if ancre_rapport in a.liens else (ancre_au_temps(a, date) or a.ancre)
-                etat.update({'tampon': min(valeur, nb), 'ancre_tampon': ancre_r, 'ancre_souple': False, 't_tampon': date})
-                souple = False
-        else:
-            rapport = valeur             # transcript sans uuid : compte rendu pris tel quel
-    synthese = max([couvertes(a, str(etat.get('ancre_tampon') or ''), entier(etat.get('tampon')), souple), rapport]
-                   + [synthese_heritee(p, n, a) for p, n in a.parents.items() if p != session])
+    # Un compte rendu se reconnaît à son contenu (compte, ancre), pas à la date du fichier (un checkout
+    # ou un clone la change). État d'avant 3.13 : les comptes rendus présents sont réputés déjà vus.
+    signature = [valeur, ancre_rapport]
+    vus = etat.get('rapports_vus')
+    if not isinstance(vus, list):
+        vus = [signature] if valeur >= 0 and (entier(etat.get('tampon')) >= 0 or etat.get('rapport_vu')) else []
+    if valeur >= 0 and not a.ancre:
+        rapport = valeur                 # transcript sans uuid : compte rendu pris tel quel
+    elif valeur >= 0 and signature not in vus:
+        vus.append(signature)
+        if valeur > actif:
+            # ancre du compte rendu : sa ligne « Ancre » si elle est au transcript, sinon l'entrée écrite
+            # juste avant lui ; il ne couvre que les demandes écrites jusque-là (pas celles d'après lui,
+            # ni les demandes de remplacement d'un /rewind)
+            ancre_r = ancre_rapport if ancre_rapport in a.liens else (ancre_au_temps(a, date) or a.ancre)
+            limite = a.liens[ancre_r][2] if ancre_r in a.liens else a.taille
+            avant = sum(1 for _, debut in a.unites if debut <= limite)
+            etat.update({'tampon': min(valeur, avant), 'ancre_tampon': ancre_r, 'ancre_souple': False, 't_tampon': date})
+            souple = False
+    etat['rapports_vus'] = vus[-20:]
+    propre = max(couvertes(a, str(etat.get('ancre_tampon') or ''), entier(etat.get('tampon')), souple), rapport)
+    synthese = max([propre] + [synthese_heritee(p, n, a) for p, n in a.parents.items() if p != session])
+    etat['couvert'] = synthese          # couverture effective, lue par les fourches de cette session
     reference = max(synthese, couvertes(a, str(etat.get('ancre_libere') or ''), entier(etat.get('libere_a'))))
     dettes = lire_dettes()
-    if isinstance(dettes.get(session), dict):
-        if not (nb >= SEUIL_MIN and not (synthese >= 0 and nb - synthese < SEUIL_REFRESH)):
-            effacer_dette(session)       # synthèse reconnue (même sans « tamponne »), ou trop peu de demandes actives
-        elif entier(dettes[session].get('nb'), 0) > nb:
-            noter_dette(session, nb, a.ancre)     # /rewind : la dette suit la branche active
-    for mere, herite in a.parents.items():   # la synthèse de cette fourche couvre ce qu'elle a hérité
-        if mere != session and isinstance(dettes.get(mere), dict):
-            effacer_dette_si(mere, lambda d, borne=min(herite, synthese), m=mere: entier(d.get('nb'), 0) <= borne
-                             and dette_dans_fourche(d, m, a.fourches.get(m, '')))
     due = nb >= SEUIL_MIN and not (reference >= 0 and nb - reference < SEUIL_REFRESH)
+    due_synthese = nb >= SEUIL_MIN and not (synthese >= 0 and nb - synthese < SEUIL_REFRESH)
+    d = dettes.get(session)
+    if isinstance(d, dict):
+        rembobinee = abandonnee(a, str(d.get('ancre') or ''))       # la dette est sur une branche quittée par /rewind
+        if synthese >= 0 and not due_synthese:
+            effacer_dette(session)       # synthèse reconnue (même sans « tamponne »)
+        elif rembobinee and not due_synthese:
+            effacer_dette(session)       # /rewind sous le seuil : plus rien à synthétiser
+        elif rembobinee and entier(d.get('nb'), 0) > nb:
+            noter_dette(session, nb, a.ancre)     # /rewind : la dette suit la branche active
+    elif due_synthese and not due:
+        noter_dette(session, nb, a.ancre)         # seule la libération retient : la dette doit rester notée
+    for mere, herite in a.parents.items():   # la synthèse propre de cette fourche couvre ce qu'elle a hérité
+        if mere != session and propre >= herite:
+            couvrir_mere(mere, herite, a.fourches.get(mere, ''))
+            effacer_dette_si(mere, lambda d, h=herite, m=mere: entier(d.get('nb'), 0) <= h
+                             and dette_dans_fourche(d, m, a.fourches.get(m, '')))
     # Pause quand la session attend du travail né depuis la dernière demande humaine (tâche en
-    # cours ou en file, réveil ponctuel planifié). Une attente plus ancienne (serveur de dev,
-    # surveillance sans fin) ne suspend plus rien.
+    # cours ou en file, réveil planifié) : jusqu'à la demande suivante. Une attente plus ancienne
+    # (serveur de dev, surveillance sans fin) ne suspend plus rien.
     attente = set()
     for x in entree.get('background_tasks') or []:
         if isinstance(x, dict) and x.get('status', 'running') in ('running', 'pending'):
@@ -691,18 +724,44 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     return 0
 
 
-def prendre_verrou(dossier: Path, cle: str) -> bool:
+def derniere_assistant(chemin: str) -> str:
+    """uuid de la dernière entrée assistant du transcript (lu par la fin) ; '' sinon."""
+    try:
+        with open(chemin, 'rb') as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 262144))
+            bloc = f.read()
+    except OSError:
+        return ''
+    for ligne in reversed(bloc.split(b'\n')):
+        if b'"assistant"' not in ligne:
+            continue
+        try:
+            o = json.loads(ligne.decode('utf-8', 'replace'))
+        except (ValueError, RecursionError):
+            continue
+        if isinstance(o, dict) and o.get('type') == 'assistant' and o.get('uuid') and not o.get('isSidechain'):
+            return str(o['uuid'])
+    return ''
+
+
+def prendre_verrou(dossier: Path, cle: str, contenu: str = '') -> bool:
     """Pose le verrou de « cle », valable 2 s (au-delà : un autre événement, le verrou est remplacé).
     False : une autre copie le tient ; True : posé, ou impossible à poser (agir quand même)."""
     verrou = dossier / hashlib.sha1(cle.encode('ascii')).hexdigest()[:24]
     for _ in range(2):
         try:
-            os.close(os.open(str(verrou), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            fd = os.open(str(verrou), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            try:
+                os.write(fd, contenu.encode('ascii', 'replace'))
+            finally:
+                os.close(fd)
             return True
         except FileExistsError:
             try:
-                if time.time() - verrou.stat().st_mtime < 2:
-                    return False          # une autre copie traite cet événement
+                lu = verrou.read_text(encoding='ascii', errors='replace') if contenu else ''
+                if time.time() - verrou.stat().st_mtime < 2 and not (contenu and lu and lu != contenu):
+                    return False          # une autre copie traite cet événement (même entrée, même feuille)
                 os.rename(str(verrou), f'{verrou}.perime.{os.getpid()}')   # une seule copie y parvient
             except OSError:
                 pass
@@ -741,9 +800,13 @@ def premiere_copie(mode: str, entree: dict, pairs: set = frozenset()) -> bool:
         dossier.mkdir(parents=True, exist_ok=True)
     except OSError:
         return True                       # verrou impossible : agir quand même (au pire deux fois)
-    for cle in [json.dumps([mode, entree], sort_keys=True, ensure_ascii=True, default=str)] + cles_anciennes(mode, entree, pairs):
-        if not prendre_verrou(dossier, cle):
-            return False
+    # Stop : deux Stop distincts peuvent avoir la même entrée ; la dernière réponse écrite les distingue
+    # (la même pour toutes les copies d'un événement), gardée dans le verrou sans changer sa clé.
+    feuille = derniere_assistant(str(entree.get('transcript_path') or '')) if mode == 'stop' else ''
+    with verrou_fichier(dossier / '.prise'):     # décision sérialisée entre copies (plus de course stat/renommage)
+        for cle in [json.dumps([mode, entree], sort_keys=True, ensure_ascii=True, default=str)] + cles_anciennes(mode, entree, pairs):
+            if not prendre_verrou(dossier, cle, feuille):
+                return False
     try:
         limite = time.time() - 60
         for f in dossier.iterdir():
@@ -755,14 +818,13 @@ def premiere_copie(mode: str, entree: dict, pairs: set = frozenset()) -> bool:
 
 
 @contextmanager
-def verrou_session(session: str):
-    """Sérialise lecture-modification-écriture de l'état d'une session : un UserPromptSubmit pendant
-    un Stop (ou un tampon) ne perd plus la mise à jour de l'autre. Sans fcntl : sans effet."""
+def verrou_fichier(chemin: Path):
+    """Verrou exclusif (flock) sur un fichier ; sans fcntl ou sans dossier inscriptible : sans effet."""
     fd = None
     if fcntl is not None:
         try:
-            dossier_etat().mkdir(parents=True, exist_ok=True)
-            fd = os.open(str(dossier_etat() / (nom_sur(session) + '.verrou')), os.O_CREAT | os.O_RDWR, 0o600)
+            chemin.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(str(chemin), os.O_CREAT | os.O_RDWR, 0o600)
             fcntl.flock(fd, fcntl.LOCK_EX)
         except OSError:
             pass
@@ -774,6 +836,14 @@ def verrou_session(session: str):
                 os.close(fd)
             except OSError:
                 pass
+
+
+@contextmanager
+def verrou_session(session: str):
+    """Sérialise lecture-modification-écriture de l'état d'une session : un UserPromptSubmit pendant
+    un Stop (ou un tampon) ne perd plus la mise à jour de l'autre. Sans fcntl : sans effet."""
+    with verrou_fichier(dossier_etat() / (nom_sur(session) + '.verrou')):
+        yield
 
 
 def commande_vive_memoire(commande) -> str:
@@ -861,8 +931,8 @@ def main() -> int:
         v = version_de(installee)
         if mode == 'debut':
             signaler_version(installee)
-        if v == (0,) or ((0,) < v < (3, 6) and marque.exists()):
-            return 0                      # ≤ 3.4 : elle agit seule ; 3.5 : elle a tourné dans cette session
+        if v in ((0,), (3, 6)) or ((0,) < v < (3, 6) and (marque.exists() or mode == 'debut')):
+            return 0                      # ≤ 3.4 et 3.6 : elle agit seule ; 3.5 : elle a tourné (au démarrage : elle seule)
     # Une copie 3.6 ou 3.7 à côté (installée, ou dans le dépôt ouvert) a sa propre clé de verrou : la
     # prendre aussi, seulement dans ce cas (sinon des événements distincts se confondraient).
     pairs = set()
