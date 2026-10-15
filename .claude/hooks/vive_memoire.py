@@ -41,7 +41,7 @@ try:
 except ImportError:          # hors macOS / Linux : pas de sérialisation, le reste marche
     fcntl = None
 
-VERSION = '3.11'
+VERSION = '3.12'
 SEUIL_MIN = 4        # demandes humaines avant d'exiger une synthèse
 SEUIL_REFRESH = 8    # nouvelles demandes depuis la dernière synthèse (ou libération)
 MAX_RELANCES = 3     # blocages consécutifs avant de laisser finir
@@ -210,8 +210,9 @@ def analyser_transcript(chemin: str):
                     points[mere] = uuid            # dernière entrée héritée : le point de fourche
                 cles = None                    # None : pas une demande ; [] : demande du repli, sans clé
                 a = o.get('attachment')
-                if invite(o):
-                    ecrits.append(debut)       # toute invite écrite, humaine ou non (tour planifié…)
+                if invite(o):                  # toute invite écrite, humaine ou non (tour planifié…),
+                    fusion = o.get('mergedSendUuids')   # autant de fois qu'elle porte d'envois fusionnés
+                    ecrits += [debut] * (1 + (len(fusion) if isinstance(fusion, list) else 0))
                 if o.get('type') == 'queued_command':          # format récent : commande en file au premier niveau
                     texte_file = texte_de(o.get('prompt')) or str(o.get('prompt') or '')
                     if humaine(o) or str(o.get('humanTurn')).lower() == 'true':
@@ -470,7 +471,8 @@ def mode_tamponne(session: str, transcript: str) -> int:
         for mere, herite in parents.items():   # une fourche synthétisée couvre ce qu'elle a hérité de sa mère
             if mere == session:
                 continue                         # (jamais sa propre mère : pas de double verrou)
-            effacer_dette_si(mere, lambda d, h=herite: entier(d.get('nb'), 0) <= h)
+            effacer_dette_si(mere, lambda d, h=herite, m=mere: entier(d.get('nb'), 0) <= h
+                             and dette_dans_fourche(d, m, a.fourches.get(m, '')))
             f_mere = dossier_etat() / (nom_sur(mere) + '.json')
             with verrou_session(mere):           # lu, comparé et écrit sous le verrou de la mère
                 etat_mere = lire_json(f_mere, {})
@@ -524,10 +526,30 @@ def dossier_dettes() -> Path:
     return dossier_etat() / 'dettes'
 
 
-def noter_dette(session: str, nb: int) -> bool:
-    # « t » date la dette : au démarrage, seule une synthèse faite après elle l'efface.
+def noter_dette(session: str, nb: int, ancre: str = '') -> bool:
+    # « t » date la dette : au démarrage, seule une synthèse faite après elle l'efface. « ancre » la situe
+    # dans la conversation : une fourche ne l'efface que si elle porte sur des demandes héritées.
     return ecrire_json(dossier_dettes() / (nom_sur(session) + '.json'),
-                {'session': session, 'nb': nb, 'date': time.strftime('%Y-%m-%d %H:%M'), 't': time.time()})
+                {'session': session, 'nb': nb, 'ancre': ancre, 'date': time.strftime('%Y-%m-%d %H:%M'), 't': time.time()})
+
+
+def dette_dans_fourche(d: dict, mere: str, point: str) -> bool:
+    """La dette de la mère ne porte-t-elle que sur des demandes héritées par la fourche (son ancre est un
+    ancêtre du point de fourche chez la mère) ? Invérifiable (pas d'ancre, uuids non partagés,
+    transcript introuvable) : oui, la règle du compte suffit."""
+    ancre = str(d.get('ancre') or '')
+    if not ancre or not point:
+        return True
+    etat_m = lire_json(dossier_etat() / (nom_sur(mere) + '.json'), {})
+    chemin = str(etat_m.get('transcript') or '') if isinstance(etat_m, dict) else ''
+    if not chemin or not os.path.isfile(chemin):
+        chemin = trouver_transcript(mere)
+    if not chemin:
+        return True
+    am = analyser_transcript(chemin)
+    if ancre not in am.liens or point not in am.liens:
+        return True
+    return ancre in (chaine_active(am.liens, point)[0] or set())
 
 
 def lire_dette(session: str):
@@ -609,10 +631,11 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
         if not (nb >= SEUIL_MIN and not (synthese >= 0 and nb - synthese < SEUIL_REFRESH)):
             effacer_dette(session)       # synthèse reconnue (même sans « tamponne »), ou trop peu de demandes actives
         elif entier(dettes[session].get('nb'), 0) > nb:
-            noter_dette(session, nb)     # /rewind : la dette suit la branche active
+            noter_dette(session, nb, a.ancre)     # /rewind : la dette suit la branche active
     for mere, herite in a.parents.items():   # la synthèse de cette fourche couvre ce qu'elle a hérité
         if mere != session and isinstance(dettes.get(mere), dict):
-            effacer_dette_si(mere, lambda d, borne=min(herite, synthese): entier(d.get('nb'), 0) <= borne)
+            effacer_dette_si(mere, lambda d, borne=min(herite, synthese), m=mere: entier(d.get('nb'), 0) <= borne
+                             and dette_dans_fourche(d, m, a.fourches.get(m, '')))
     due = nb >= SEUIL_MIN and not (reference >= 0 and nb - reference < SEUIL_REFRESH)
     # Pause quand la session attend du travail né depuis la dernière demande humaine (tâche en
     # cours ou en file, réveil ponctuel planifié). Une attente plus ancienne (serveur de dev,
@@ -632,7 +655,7 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     etat.pop('pause_ids', None); etat.pop('pause_nb', None)
     if any(n >= nb for n in vues.values()):
         if due:
-            noter_dette(session, nb)     # si la discussion est abandonnée pendant l'attente
+            noter_dette(session, nb, a.ancre)     # si la discussion est abandonnée pendant l'attente
         ecrire_json(f_etat, etat)
         return 0
     if not due:
@@ -644,7 +667,7 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     if relances >= MAX_RELANCES:
         etat.update({'relances': 0, 'libere_a': nb, 'ancre_libere': a.ancre})
         ecrire_json(f_etat, etat)
-        notee = noter_dette(session, nb)
+        notee = noter_dette(session, nb, a.ancre)
         if os.environ.get('CLAUDE_CODE_REMOTE') or not notee:
             ou = (('la dette n\'a pas pu être notée (' + str(dossier_dettes()) + ') ; ' if not notee else
                    'en cloud, le rappel ne survit pas au conteneur : ')
@@ -657,7 +680,7 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     if not ecrire_json(f_etat, etat):
         sortie({'systemMessage': 'Vive mémoire : état non inscriptible (' + str(f_etat.parent) + '), synthèse non vérifiée.'})
         return 0
-    noter_dette(session, nb)   # effacée par « tamponne » ; rappelée si la discussion est abandonnée
+    noter_dette(session, nb, a.ancre)   # effacée par « tamponne » ; rappelée si la discussion est abandonnée
     commande = f'python3 "{ICI / "vive_memoire.py"}" tamponne {session}'
     sortie({'decision': 'block', 'reason': (
         f'Vive mémoire : cette discussion compte {nb} demandes de Baptiste et aucune synthèse récente '
@@ -668,26 +691,14 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     return 0
 
 
-def premiere_copie(mode: str, entree: dict, compat_36: bool = False) -> bool:
-    """Plusieurs copies (utilisateur, dépôt) reçoivent le même événement en parallèle, avec la même
-    entrée : seule la première à en poser le verrou agit. La clé ne porte que l'entrée (pas la taille
-    du transcript, qui peut changer entre deux lectures) ; un verrou de plus de 2 s est celui d'un
-    autre événement : il est remplacé. VM_VERROU=non le coupe (banc)."""
-    if os.environ.get('VM_VERROU') == 'non':
-        return True
-    cle = json.dumps([mode, entree], sort_keys=True, ensure_ascii=True, default=str)   # toute l'entrée : tâches, crons…
-    dossier = dossier_etat() / 'evenements'
-    try:
-        dossier.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        return True                       # verrou impossible : agir quand même (au pire deux fois)
+def prendre_verrou(dossier: Path, cle: str) -> bool:
+    """Pose le verrou de « cle », valable 2 s (au-delà : un autre événement, le verrou est remplacé).
+    False : une autre copie le tient ; True : posé, ou impossible à poser (agir quand même)."""
     verrou = dossier / hashlib.sha1(cle.encode('ascii')).hexdigest()[:24]
-    pris = False
     for _ in range(2):
         try:
             os.close(os.open(str(verrou), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
-            pris = True
-            break
+            return True
         except FileExistsError:
             try:
                 if time.time() - verrou.stat().st_mtime < 2:
@@ -697,8 +708,42 @@ def premiere_copie(mode: str, entree: dict, compat_36: bool = False) -> bool:
                 pass
         except OSError:
             return True
-    if not pris or (compat_36 and not verrou_36(mode, entree, dossier)):
-        return False
+    return False
+
+
+def cles_anciennes(mode: str, entree: dict, pairs: set) -> list:
+    """Clés de verrou des versions 3.6 et 3.7, à prendre aussi quand une copie de cette version tourne à côté."""
+    cles = []
+    if (3, 7) in pairs:
+        cles.append(json.dumps([mode, entree.get('session_id'), entree.get('transcript_path'), entree.get('prompt'),
+                                entree.get('prompt_id'), entree.get('source'), entree.get('stop_hook_active')],
+                               ensure_ascii=True, default=str))
+    if (3, 6) in pairs:
+        chemin = str(entree.get('transcript_path') or '')
+        try:
+            taille = os.path.getsize(chemin) if chemin else -1
+        except OSError:
+            taille = -1
+        cles.append(json.dumps([mode, entree.get('session_id'), chemin, taille, entree.get('prompt'), entree.get('source'),
+                                entree.get('stop_hook_active')], ensure_ascii=True, default=str))
+    return cles
+
+
+def premiere_copie(mode: str, entree: dict, pairs: set = frozenset()) -> bool:
+    """Plusieurs copies (utilisateur, dépôt) reçoivent le même événement en parallèle, avec la même
+    entrée : seule la première à en poser le verrou agit. Clé FIGÉE depuis 3.8 (toute l'entrée) : ne
+    plus jamais la changer, une copie d'une autre version ne la verrait pas. Avec une copie 3.6 ou 3.7
+    à côté (« pairs »), sa clé est prise aussi. VM_VERROU=non coupe tout (banc)."""
+    if os.environ.get('VM_VERROU') == 'non':
+        return True
+    dossier = dossier_etat() / 'evenements'
+    try:
+        dossier.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return True                       # verrou impossible : agir quand même (au pire deux fois)
+    for cle in [json.dumps([mode, entree], sort_keys=True, ensure_ascii=True, default=str)] + cles_anciennes(mode, entree, pairs):
+        if not prendre_verrou(dossier, cle):
+            return False
     try:
         limite = time.time() - 60
         for f in dossier.iterdir():
@@ -707,25 +752,6 @@ def premiere_copie(mode: str, entree: dict, compat_36: bool = False) -> bool:
     except OSError:
         pass
     return True
-
-
-def verrou_36(mode: str, entree: dict, dossier: Path) -> bool:
-    """Compatibilité avec une copie 3.6, qui prend son verrou sous une autre clé (avec la taille du
-    transcript) : le prendre aussi, pour qu'une seule des deux agisse sur l'événement."""
-    chemin = str(entree.get('transcript_path') or '')
-    try:
-        taille = os.path.getsize(chemin) if chemin else -1
-    except OSError:
-        taille = -1
-    cle = json.dumps([mode, entree.get('session_id'), chemin, taille, entree.get('prompt'), entree.get('source'),
-                      entree.get('stop_hook_active')], ensure_ascii=True, default=str)
-    try:
-        os.close(os.open(str(dossier / hashlib.sha1(cle.encode('ascii')).hexdigest()[:24]), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
-        return True
-    except FileExistsError:
-        return False
-    except OSError:
-        return True
 
 
 @contextmanager
@@ -837,10 +863,14 @@ def main() -> int:
             signaler_version(installee)
         if v == (0,) or ((0,) < v < (3, 6) and marque.exists()):
             return 0                      # ≤ 3.4 : elle agit seule ; 3.5 : elle a tourné dans cette session
-    # Une copie 3.6 (installée, ou dans un vieux checkout à côté de la copie utilisateur) a son propre
-    # verrou : le prendre aussi dans ces deux cas.
-    compat_36 = copie == 'utilisateur' or (copie == 'doublon' and v == (3, 6))
-    if not premiere_copie(mode, entree, compat_36):
+    # Une copie 3.6 ou 3.7 à côté (installée, ou dans le dépôt ouvert) a sa propre clé de verrou : la
+    # prendre aussi, seulement dans ce cas (sinon des événements distincts se confondraient).
+    pairs = set()
+    if copie == 'doublon':
+        pairs.add(v)
+    elif copie == 'utilisateur' and os.environ.get('CLAUDE_PROJECT_DIR'):
+        pairs.add(version_de(Path(os.environ['CLAUDE_PROJECT_DIR']) / '.claude/hooks/vive_memoire.py'))
+    if not premiere_copie(mode, entree, pairs):
         return 0
     if mode == 'debut':
         return mode_debut(session, str(entree.get('source') or ''))
