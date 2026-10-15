@@ -29,11 +29,12 @@ import json
 import os
 import re
 import sys
+import tempfile
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
-VERSION = '3.6'
+VERSION = '3.7'
 SEUIL_MIN = 4        # demandes humaines avant d'exiger une synthèse
 SEUIL_REFRESH = 8    # nouvelles demandes depuis la dernière synthèse (ou libération)
 MAX_RELANCES = 3     # blocages consécutifs avant de laisser finir
@@ -73,6 +74,13 @@ def lire_json(chemin: Path, defaut):
         return defaut
 
 
+def reel(valeur, defaut: float = 0.0) -> float:
+    try:
+        return float(valeur)
+    except (TypeError, ValueError):
+        return defaut
+
+
 def entier(valeur, defaut: int = -1) -> int:
     try:
         return int(valeur)
@@ -85,14 +93,23 @@ def liste(valeur) -> list:
 
 
 def ecrire_json(chemin: Path, valeur) -> bool:
-    """Écriture atomique ; False si impossible (dossier en lecture seule, disque plein…)."""
+    """Écriture atomique par un fichier temporaire propre à chaque écrivain (deux copies qui écrivent
+    ensemble ne mélangent jamais leurs octets) ; False si impossible (lecture seule, disque plein…)."""
     try:
         chemin.parent.mkdir(parents=True, exist_ok=True)
-        tmp = chemin.with_name(chemin.name + '.tmp')
-        tmp.write_text(json.dumps(valeur, ensure_ascii=False), encoding='utf-8')
+        fd, tmp = tempfile.mkstemp(dir=str(chemin.parent), prefix=chemin.name + '.', suffix='.tmp')
+    except OSError:
+        return False
+    try:
+        with os.fdopen(fd, 'w', encoding='ascii') as f:
+            f.write(json.dumps(valeur, ensure_ascii=True))
         os.replace(tmp, chemin)
         return True
-    except OSError:
+    except (OSError, ValueError):
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
         return False
 
 
@@ -279,45 +296,71 @@ def compter(etat: dict, a, avec_attente: bool = True):
 
 
 def chemins_memoire() -> list:
-    racine = Path(os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd())
+    """Dossiers mémoire candidats, les mêmes quelle que soit la copie qui tourne (dépôt ou utilisateur) ;
+    un dossier illisible est sauté (os.path.isfile ne lève jamais)."""
+    try:
+        racine = Path(os.environ.get('CLAUDE_PROJECT_DIR') or os.getcwd())
+    except OSError:
+        racine = Path.home()
     candidats = [os.environ.get('VM_MEMOIRE') or '', racine / 'docs/context', racine / 'claude-macos-app/docs/context',
-                 racine.parent / 'claude-macos-app/docs/context', ICI.parents[1] / 'docs/context',
-                 ICI.parents[2] / 'claude-macos-app/docs/context', Path.home() / 'Documents/Claude/docs/context']
+                 racine.parent / 'claude-macos-app/docs/context', Path.home() / 'claude-macos-app/docs/context',
+                 dossier_config().parent / 'claude-macos-app/docs/context', Path.home() / 'Documents/Claude/docs/context']
+    candidats += [ICI.parents[k] / suite for k, suite in ((1, 'docs/context'), (2, 'claude-macos-app/docs/context'))
+                  if len(ICI.parents) > k]
     vus = []
     for c in candidats:
-        if c and Path(c, 'decision-log.md').exists() and Path(c).resolve() not in vus:
-            vus.append(Path(c).resolve())
+        if c and os.path.isfile(os.path.join(str(c), 'decision-log.md')):
+            try:
+                r = Path(c).resolve()
+            except (OSError, RuntimeError):
+                continue
+            if r not in vus:
+                vus.append(r)
     return vus
 
 
-def tampon_durable(session: str) -> int:
-    """Compte rendu commité portant le bloc « Session : <id> » puis « Demandes : <nb> » (survit au conteneur)."""
+def rapport_durable(session: str):
+    """(nb, date) du compte rendu commité le plus récent portant le bloc « Session : <id> » puis
+    « Demandes : <nb> » (survit au conteneur) ; (-1, 0.0) sinon. Comptes rendus de même date (à
+    2 s près, ex. un clone frais) : le plus grand compte."""
     deco = r'[ \t>*_`-]*'
     motif = re.compile(r'^' + deco + 'Session' + deco + ':' + deco + re.escape(session) + deco + r'\r?\n'
                        + deco + 'Demandes' + deco + ':' + deco + r'(\d+)', re.M)
-    meilleur = -1
+    trouves = []
     for memoire in chemins_memoire():
-        for cr in (memoire / 'sessions').glob('*.md'):
+        try:
+            fichiers = list((memoire / 'sessions').glob('*.md'))
+        except OSError:
+            continue
+        for cr in fichiers:
             try:
                 m = motif.search(cr.read_text(encoding='utf-8', errors='replace'))
+                date = cr.stat().st_mtime
             except OSError:
                 continue
             if m:
-                meilleur = max(meilleur, int(m.group(1)))
-    return meilleur
+                trouves.append((date, int(m.group(1))))
+    if not trouves:
+        return -1, 0.0
+    recente = max(d for d, _ in trouves)
+    return max(n for d, n in trouves if d >= recente - 2), recente
 
 
-def reference_session(session: str) -> int:
+def tampon_durable(session: str) -> int:
+    return rapport_durable(session)[0]
+
+
+def synthese_session(session: str) -> int:
+    """Plus grand tampon connu d'une autre session (état ou compte rendu), libération exclue."""
     etat = lire_json(dossier_etat() / (nom_sur(session) + '.json'), {})
-    etat = etat if isinstance(etat, dict) else {}
-    return max(entier(etat.get('tampon')), entier(etat.get('libere_a')), tampon_durable(session))
+    return max(entier(etat.get('tampon')) if isinstance(etat, dict) else -1, tampon_durable(session))
 
 
 def chemin_skill() -> str:
     for c in ([ICI.parent / 'skills/vive-memoire/SKILL.md', ICI.parents[1] / 'skills/vive-memoire/SKILL.md',
                dossier_config() / 'skills/vive-memoire/SKILL.md']
               + [m / 'skills/vive-memoire/SKILL.md' for m in chemins_memoire()]):
-        if c.exists():
+        if os.path.isfile(str(c)):
             return str(c)
     return 'claude-macos-app/docs/context/skills/vive-memoire/SKILL.md'
 
@@ -366,23 +409,36 @@ def mode_tamponne(session: str, transcript: str) -> int:
         return 1
     a = analyser_transcript(chemin)
     nb, parents = compter(etat, a), a.parents
-    etat.update({'tampon': nb, 'ancre_tampon': a.ancre, 'relances': 0, 'date_tampon': time.strftime('%Y-%m-%d %H:%M')})
+    valeur, date = rapport_durable(session)
+    etat.update({'tampon': nb, 'ancre_tampon': a.ancre, 't_tampon': time.time(), 'rapport_vu': [valeur, int(date)],
+                 'relances': 0, 'date_tampon': time.strftime('%Y-%m-%d %H:%M')})
     ok = ecrire_json(f_etat, etat)
     if ok:                                 # sans tampon écrit, la dette reste pour le rappel suivant
         effacer_dette(session)
         for mere, herite in parents.items():   # une fourche synthétisée couvre ce qu'elle a hérité de sa mère
             if isinstance(dette.get(mere), dict) and entier(dette[mere].get('nb'), 0) <= herite:
                 effacer_dette(mere)
+            f_mere = dossier_etat() / (nom_sur(mere) + '.json')
+            etat_mere = lire_json(f_mere, {})
+            etat_mere = etat_mere if isinstance(etat_mere, dict) else {}
+            if entier(etat_mere.get('tampon')) < herite:     # reprise de la mère : déjà couverte jusque-là
+                etat_mere.update({'tampon': herite, 'ancre_tampon': '', 't_tampon': time.time()})
+                ecrire_json(f_mere, etat_mere)
     print(f'Vive mémoire : synthèse enregistrée pour la session {session} ({nb} demandes)'
           + ('' if ok else ' — ATTENTION : état non inscriptible, rien n\'a été écrit') + '.')
     print(f'Inscris aussi « Session : {session} » et « Demandes : {nb} » dans le compte rendu de session.')
     return 0 if ok else 1
 
 
-def synthese_connue(session: str) -> int:
-    """Plus grand tampon connu d'une session (état ou compte rendu durable), libération exclue."""
+def synthese_depuis(session: str, t: float) -> int:
+    """Plus grand compte d'une synthèse faite après l'instant t (tampon de l'état ou compte rendu) ; -1 sinon."""
     etat = lire_json(dossier_etat() / (nom_sur(session) + '.json'), {})
-    return max(entier(etat.get('tampon')) if isinstance(etat, dict) else -1, tampon_durable(session))
+    etat = etat if isinstance(etat, dict) else {}
+    valeurs = [entier(etat.get('tampon'))] if reel(etat.get('t_tampon')) > t else []
+    valeur, date = rapport_durable(session)
+    if date > t:
+        valeurs.append(valeur)
+    return max(valeurs, default=-1)
 
 
 def mode_debut(session: str, source: str) -> int:
@@ -392,13 +448,12 @@ def mode_debut(session: str, source: str) -> int:
     for s, v in dette.items():
         if not isinstance(v, dict):
             continue
-        connue = synthese_connue(s)
-        if connue >= entier(v.get('nb'), 0) and connue > entier(v.get('synthese_vue')):
-            effacer_dette(s)                 # une synthèse a été faite depuis (tampon ou compte rendu)
+        if synthese_depuis(s, reel(v.get('t'))) >= entier(v.get('nb'), 0):
+            effacer_dette(s)                 # une synthèse faite depuis la dette la couvre (tampon ou compte rendu)
             continue
         if s == session and source == 'resume':
             dues[s] = v                      # on reprend la discussion qui doit sa synthèse
-        elif s != session and maintenant - entier(v.get('t'), 0) > 3600:
+        elif s != session and maintenant - reel(v.get('t')) > 3600:
             dues[s] = v                      # une autre session, abandonnée depuis plus d'une heure
     if dues:
         lignes = [f'- session {s} : {v.get("nb", "?")} demandes, le {v.get("date", "?")}, sans synthèse' for s, v in dues.items()]
@@ -413,11 +468,9 @@ def dossier_dettes() -> Path:
 
 
 def noter_dette(session: str, nb: int) -> None:
-    # synthese_vue : la synthèse déjà connue au moment de la dette (un tampon d'avant un /rewind
-    # peut dépasser nb) ; seule une synthèse plus récente l'efface au démarrage.
+    # « t » date la dette : au démarrage, seule une synthèse faite après elle l'efface.
     ecrire_json(dossier_dettes() / (nom_sur(session) + '.json'),
-                {'session': session, 'nb': nb, 'synthese_vue': synthese_connue(session),
-                 'date': time.strftime('%Y-%m-%d %H:%M'), 't': time.time()})
+                {'session': session, 'nb': nb, 'date': time.strftime('%Y-%m-%d %H:%M'), 't': time.time()})
 
 
 def lire_dettes() -> dict:
@@ -455,24 +508,31 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     nb = compter(etat, a, avec_attente=not planifie)   # un tour planifié n'est pas une demande de Baptiste
     etat['prompts'] = []      # au Stop suivant, ces demandes-là sont au transcript (ou ne le seront jamais)
     # Références : tampon et libération ramenés à la branche active (après /rewind, seules les
-    # demandes encore actives restent couvertes) ; le compte rendu durable ne compte que s'il est
-    # plus récent que l'état (sinon c'est la même synthèse, déjà ramenée).
-    brut = max(entier(etat.get('tampon')), entier(etat.get('libere_a')))
-    durable = tampon_durable(session)
-    tampon_actif = couvertes(a, str(etat.get('ancre_tampon') or ''), entier(etat.get('tampon')))
-    if durable <= max(brut, entier(etat.get('durable_vu'))) or tampon_actif < entier(etat.get('tampon')):
-        durable = -1                 # même synthèse que l'état, ou tampon ramené par /rewind : le compte rendu n'y ajoute rien
-    elif durable > nb and a.ancre:
-        # Compte rendu plus grand que le transcript (fichier reconstruit depuis une compaction) :
-        # on repart d'ici, une fois pour toutes, plutôt que de masquer les demandes à venir.
-        etat.update({'tampon': nb, 'ancre_tampon': a.ancre, 'durable_vu': durable})
-        durable = -1
-    synthese = max([couvertes(a, str(etat.get('ancre_tampon') or ''), entier(etat.get('tampon'))), durable]
-                   + [min(reference_session(p), n) for p, n in a.parents.items() if p != session])
+    # demandes encore actives restent couvertes). Un compte rendu nouveau (synthèse écrite sans
+    # « tamponne », état perdu, transcript reconstruit) est ancré ici comme un tampon, plafonné au
+    # compte du transcript, dès le premier Stop qui le voit : /rewind le ramène ensuite de même.
+    valeur, date = rapport_durable(session)
+    actif = couvertes(a, str(etat.get('ancre_tampon') or ''), entier(etat.get('tampon')))
+    rapport = -1
+    if valeur >= 0 and [valeur, int(date)] != etat.get('rapport_vu'):
+        if a.ancre:
+            etat['rapport_vu'] = [valeur, int(date)]
+            if valeur > actif:
+                etat.update({'tampon': min(valeur, nb), 'ancre_tampon': a.ancre, 't_tampon': date})
+        else:
+            rapport = valeur             # transcript sans uuid : compte rendu pris tel quel
+    synthese = max([couvertes(a, str(etat.get('ancre_tampon') or ''), entier(etat.get('tampon'))), rapport]
+                   + [min(synthese_session(p), n) for p, n in a.parents.items() if p != session])
     reference = max(synthese, couvertes(a, str(etat.get('ancre_libere') or ''), entier(etat.get('libere_a'))))
-    dette = lire_dettes().get(session)
-    if synthese >= 0 and isinstance(dette, dict) and entier(dette.get('nb'), 0) <= synthese:
-        effacer_dette(session)       # synthèse reconnue (même sans « tamponne ») : plus de rappel
+    dettes = lire_dettes()
+    if isinstance(dettes.get(session), dict):
+        if not (nb >= SEUIL_MIN and not (synthese >= 0 and nb - synthese < SEUIL_REFRESH)):
+            effacer_dette(session)       # synthèse reconnue (même sans « tamponne »), ou trop peu de demandes actives
+        elif entier(dettes[session].get('nb'), 0) > nb:
+            noter_dette(session, nb)     # /rewind : la dette suit la branche active
+    for mere, herite in a.parents.items():   # la synthèse de cette fourche couvre ce qu'elle a hérité
+        if mere != session and isinstance(dettes.get(mere), dict) and entier(dettes[mere].get('nb'), 0) <= min(herite, synthese):
+            effacer_dette(mere)
     due = nb >= SEUIL_MIN and not (reference >= 0 and nb - reference < SEUIL_REFRESH)
     # Pause quand la session attend du travail né depuis la dernière demande humaine (tâche en
     # cours ou en file, réveil ponctuel planifié). Une attente plus ancienne (serveur de dev,
@@ -525,28 +585,40 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
 
 
 def premiere_copie(mode: str, entree: dict) -> bool:
-    """Plusieurs copies (utilisateur, dépôt) reçoivent le même événement en parallèle : seule la
-    première à en poser le verrou agit. La clé porte la taille du transcript, qui grandit d'un
-    événement à l'autre : rien ne persiste d'une exécution à la suivante. VM_VERROU=non le coupe."""
+    """Plusieurs copies (utilisateur, dépôt) reçoivent le même événement en parallèle, avec la même
+    entrée : seule la première à en poser le verrou agit. La clé ne porte que l'entrée (pas la taille
+    du transcript, qui peut changer entre deux lectures) ; un verrou de plus de 2 s est celui d'un
+    autre événement : il est remplacé. VM_VERROU=non le coupe (banc)."""
     if os.environ.get('VM_VERROU') == 'non':
         return True
-    chemin = str(entree.get('transcript_path') or '')
-    try:
-        taille = os.path.getsize(chemin) if chemin else -1
-    except OSError:
-        taille = -1
-    cle = json.dumps([mode, entree.get('session_id'), chemin, taille, entree.get('prompt'), entree.get('source'),
-                      entree.get('stop_hook_active')], ensure_ascii=True, default=str)
+    cle = json.dumps([mode, entree.get('session_id'), entree.get('transcript_path'), entree.get('prompt'),
+                      entree.get('prompt_id'), entree.get('source'), entree.get('stop_hook_active')],
+                     ensure_ascii=True, default=str)
     dossier = dossier_etat() / 'evenements'
     try:
         dossier.mkdir(parents=True, exist_ok=True)
-        os.close(os.open(str(dossier / hashlib.sha1(cle.encode('ascii')).hexdigest()[:24]), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
-    except FileExistsError:
-        return False
     except OSError:
-        return True                   # verrou impossible : agir quand même (au pire deux fois)
+        return True                       # verrou impossible : agir quand même (au pire deux fois)
+    verrou = dossier / hashlib.sha1(cle.encode('ascii')).hexdigest()[:24]
+    pris = False
+    for _ in range(2):
+        try:
+            os.close(os.open(str(verrou), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            pris = True
+            break
+        except FileExistsError:
+            try:
+                if time.time() - verrou.stat().st_mtime < 2:
+                    return False          # une autre copie traite cet événement
+                os.rename(str(verrou), f'{verrou}.perime.{os.getpid()}')   # une seule copie y parvient
+            except OSError:
+                pass
+        except OSError:
+            return True
+    if not pris:
+        return False
     try:
-        limite = time.time() - 600
+        limite = time.time() - 60
         for f in dossier.iterdir():
             if f.stat().st_mtime < limite:
                 f.unlink()
@@ -589,15 +661,26 @@ def main() -> int:
     if not session:
         return 0
     # L'enveloppe dit quelle copie on est. « doublon » : copie d'un dépôt alors qu'une installation
-    # utilisateur est enregistrée. Si celle-ci date d'avant le verrou par événement (≤ 3.5), elle
-    # seule agit, comme avant ; sinon, toute copie qui reçoit l'événement passe par le verrou :
-    # réglages utilisateur illisibles ou non chargés (--setting-sources) = la copie du dépôt agit.
-    if os.environ.get('VM_COPIE') == 'doublon':
+    # utilisateur est enregistrée. Celle-ci d'avant le verrou par événement : ≤ 3.4, elle seule agit
+    # (comme avant) ; 3.5, elle seule agit si sa marque montre qu'elle a tourné dans la session.
+    # Sinon toute copie passe par le verrou : réglages utilisateur illisibles ou non chargés
+    # (--setting-sources) = la copie du dépôt agit. La copie utilisateur pose encore la marque,
+    # pour qu'une copie de dépôt 3.5 (sans verrou) se taise.
+    copie = os.environ.get('VM_COPIE', '')
+    marque = dossier_etat() / 'actifs' / nom_sur(session)
+    if copie == 'utilisateur':
+        try:                              # marque lue par une copie de dépôt 3.5 (qui se tait alors)
+            marque.parent.mkdir(parents=True, exist_ok=True)
+            marque.touch()
+        except OSError:
+            pass
+    elif copie == 'doublon':
         installee = Path(os.environ.get('VM_COPIE_UTILISATEUR') or '')
+        v = version_de(installee)
         if mode == 'debut':
             signaler_version(installee)
-        if (0,) <= version_de(installee) < (3, 6):
-            return 0
+        if v == (0,) or ((0,) < v < (3, 6) and marque.exists()):
+            return 0                      # ≤ 3.4 : elle agit seule ; 3.5 : elle a tourné dans cette session
     if not premiere_copie(mode, entree):
         return 0
     if mode == 'debut':

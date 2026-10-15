@@ -101,6 +101,13 @@ def bloque(j):
     return j.get('decision') == 'block'
 
 
+def vieillir(dossier, secondes=10):
+    """Simule le temps qui passe pour les verrous par événement (valables 2 s)."""
+    for f in Path(dossier).glob('*'):
+        t = f.stat().st_mtime - secondes
+        os.utime(f, (t, t))
+
+
 def assistant(uuid, parent):
     return {'type': 'assistant', 'uuid': uuid, 'parentUuid': parent, 'message': {'role': 'assistant', 'content': 'ok'}}
 
@@ -208,7 +215,7 @@ verifie('29b. … et la copie du dépôt, qui reçoit le même événement, se t
 t4b = b.transcript('t4b', [humain(x) for x in 'abcd'])
 evt2 = {'session_id': 'S20d', 'transcript_path': t4b, 'stop_hook_active': False}
 rc, j, _, _ = b.appel('stop', evt2, VERROU, enveloppe=inst / 'vive-memoire-stop.sh')
-ajouter(t4b, {'type': 'assistant', 'message': {'role': 'assistant', 'content': 'suite'}})
+vieillir(b.etat / 'evenements')    # reprise plus tard, sans les réglages utilisateur
 rc, j2, _, _ = b.appel('stop', evt2, VERROU)
 verifie('29g. reprise sans les réglages utilisateur (--setting-sources project) : la copie du dépôt agit', bloque(j) and bloque(j2), [j, j2])
 cmd_u = ['bash', str(inst / 'vive-memoire-stop.sh'), 'stop']
@@ -216,16 +223,29 @@ cmd_d = ['bash', str(b.enveloppe), 'stop']
 env_v = b.env(VERROU)
 evt3 = json.dumps({'session_id': 'S20e', 'transcript_path': t4, 'stop_hook_active': False})
 ps = [subprocess.Popen(c, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, env=env_v) for c in (cmd_u, cmd_d)]
-sorties = [x.communicate(evt3, timeout=30)[0] for x in ps]
-verifie('29i. deux copies lancées en parallèle sur le même événement : une seule agit',
+ps[0].stdin.write(evt3); ps[0].stdin.close()
+with open(t4, 'a') as f:
+    f.write(json.dumps({'type': 'queue-operation', 'operation': 'enqueue'}) + '\n')   # écriture entre les deux lectures
+ps[1].stdin.write(evt3); ps[1].stdin.close()
+sorties = [x.stdout.read() for x in ps]
+[x.wait(timeout=30) for x in ps]
+verifie('29i. deux copies en parallèle sur le même événement, transcript écrit entre elles : une seule agit',
         sum('"block"' in x for x in sorties) == 1, sorties)
+verifie('29j. la copie utilisateur pose encore la marque lue par une copie de dépôt 3.5', (b.etat / 'actifs/S20').exists())
+(b.etat / 'evenements').rename(b.racine / 'evenements-fichier'); (b.etat / 'evenements').write_text('pas un dossier')
+rc, j, _, _ = b.appel('stop', {'session_id': 'S20h', 'transcript_path': t4}, VERROU)
+verifie('29m. verrou impossible (chemin occupé par un fichier) : la copie agit quand même', bloque(j), j)
+(b.etat / 'evenements').unlink()
 (inst / 'vive_memoire.py').write_text("# sans numéro de version\n")
 rc, j, out, _ = b.appel('debut', {'session_id': 'S20g', 'source': 'startup'})
 verifie('29e2. copie utilisateur sans numéro de version : avis « antérieure à 3.5 », et elle seule agit',
         'antérieure à 3.5' in out and b.appel('stop', {'session_id': 'S20g', 'transcript_path': t4}, VERROU)[1] == {}, out[:200])
 (inst / 'vive_memoire.py').write_text("VERSION = '3.5'\n")
-verifie('29h. copie utilisateur d\'avant le verrou (≤ 3.5) enregistrée : la copie du dépôt se tait, comme avant',
-        b.appel('stop', {'session_id': 'S20f', 'transcript_path': t4}, VERROU)[1] == {})
+rc, j, _, _ = b.appel('stop', {'session_id': 'S20f', 'transcript_path': t4}, VERROU)
+(b.etat / 'actifs').mkdir(parents=True, exist_ok=True); (b.etat / 'actifs/S20i').touch()
+rc2, j2, _, _ = b.appel('stop', {'session_id': 'S20i', 'transcript_path': t4}, VERROU)
+verifie('29h. copie utilisateur 3.5 enregistrée : le dépôt agit si elle n\'a pas tourné (pas de marque), se tait sinon',
+        bloque(j) and j2 == {}, [j, j2])
 (inst / 'vive_memoire.py').write_text((ICI / 'vive_memoire.py').read_text(encoding='utf-8'), encoding='utf-8')
 (b.home / '.claude/settings.json').write_text('{\n  // mes réglages\n' + json.dumps({'hooks': {'Stop': [{'hooks': [{'command': f'bash "{inst}/vive-memoire-stop.sh" stop'}]}]}})[1:])
 verifie('29b2. réglages utilisateur invalides (Claude Code les ignore) : la copie du dépôt agit', bloque(b.stop('S20c', t4)[1]))
@@ -369,6 +389,7 @@ trw3 = proj / 'S66.jsonl'
 trw3.write_text('\n'.join(json.dumps(x) for x in tours('', 10)) + '\n')
 b.python('tamponne', 'S66')
 (mem / 'sessions/2026-10-15-h.md').write_text('Session : S66\nDemandes : 11\n')
+b.stop('S66', str(trw3))           # le tour qui a écrit le compte rendu se termine par un Stop
 ajouter(str(trw3), *tours('bis', 8, parent='a2', debut=3))
 rc, j = b.stop('S66', str(trw3))
 verifie('30w4. /rewind avec un compte rendu un peu plus grand que le tampon : la relance a lieu', bloque(j) and '10 demandes' in j.get('reason', ''), j)
@@ -416,6 +437,61 @@ verifie('30aa. transcript reconstruit entre l\'envoi et le Stop : la demande dé
         bloque(j64) and '4 demandes' in j64.get('reason', ''), j64)
 side = [dict(ancien('Warmup'), isSidechain=True) for _ in range(4)]
 verifie('30ab. entrées de sous-agent (isSidechain) : ni demandes ni invites', not bloque(b.stop('S65', b.transcript('tside', side + [humain('a')]))[1]))
+tc7 = proj / 'S67.jsonl'
+tc7.write_text('\n'.join(json.dumps(x) for x in tours('', 10)) + '\n')
+b.python('tamponne', 'S67')
+ajouter(str(tc7), *tours('c', 12, parent='a2', debut=3))
+rc, j = b.stop('S67', str(tc7))
+(mem / 'sessions/2026-10-15-i.md').write_text('Session : S67\nDemandes : 14\n')
+rc2, j2 = b.stop('S67', str(tc7))
+verifie('30ad. synthèse par compte rendu après /rewind : reconnue (plus de relance) et dette effacée',
+        bloque(j) and not bloque(j2) and 'S67' not in b.dette(), [j.get('reason', '')[:80], j2, 'S67' in b.dette()])
+tc8 = b.transcript('tc8', tours('', 10))
+(mem / 'sessions/2026-10-15-j.md').write_text('Session : S68\nDemandes : 10\n')
+rc, j = b.stop('S68', tc8)
+ajouter(tc8, *tours('d', 8, parent='a2', debut=3))
+rc2, j2 = b.stop('S68', tc8)
+verifie('30ae. synthèse par compte rendu seul, puis /rewind : la relance a lieu', not bloque(j) and bloque(j2), [j, j2])
+tc9 = b.transcript('tc9', [frontiere('ailleurs')] + tours('r', 2, parent='B'))
+(mem / 'sessions/2026-10-15-k.md').write_text('Session : S69\nDemandes : 12\n')
+b.stop('S69', tc9)
+ajouter(tc9, *tours('s', 8, parent='ra2'))
+rc, j = b.stop('S69', tc9)
+nouveau = mem / 'sessions/2026-10-15-l.md'
+nouveau.write_text('Session : S69\nDemandes : 10\n')
+t_n = time.time() + 5; os.utime(nouveau, (t_n, t_n))
+rc2, j2 = b.stop('S69', tc9)
+rc3, j3, out, _ = b.appel('debut', {'session_id': 'S69', 'source': 'resume'})
+verifie('30af. transcript reconstruit, nouveau compte rendu plus petit que l\'ancien : reconnu, dette effacée',
+        bloque(j) and not bloque(j2) and 'S69' not in out and 'S69' not in b.dette(), [j.get('reason', '')[:60], j2, out[:120]])
+tc10 = b.transcript('tc10', tours('', 4))
+b.stop('S70', tc10)
+ajouter(tc10, humain('c bis', uuid='h3b', parentUuid='a2'), assistant('a3b', 'h3b'))
+rc, j = b.stop('S70', tc10)
+verifie('30ag. dette notée puis /rewind sous le seuil : dette effacée', 'S70' not in b.dette() and not bloque(j), [j, list(b.dette())])
+b.poser_dette('MERE3', nb=5)
+tf3 = b.transcript('FILLE3', [humain(x, forkedFrom={'sessionId': 'MERE3'}) for x in 'abcde'] + [humain('f')])
+(mem / 'sessions/2026-10-15-m.md').write_text('Session : FILLE3\nDemandes : 6\n')
+b.stop('FILLE3', tf3)
+tf4 = b.transcript('FILLE4', [humain(x, forkedFrom={'sessionId': 'MERE4'}) for x in 'abcde'] + [humain('f')])
+shutil.copy(tf4, proj / 'FILLE4.jsonl')
+b.python('tamponne', 'FILLE4')
+rc, j = b.stop('MERE4', b.transcript('MERE4', [humain(x) for x in 'abcde']))
+verifie('30ah. fourche : son compte rendu efface la dette de la mère ; après son tampon, la mère reprise ne relance pas',
+        'MERE3' not in b.dette() and not bloque(j), [list(b.dette()), j])
+hmem = b.home / 'claude-macos-app/docs/context'; (hmem / 'sessions').mkdir(parents=True)
+(hmem / 'decision-log.md').write_text('# D\n'); (hmem / 'sessions/x.md').write_text('Session : S71\nDemandes : 4\n')
+verifie('30ai. mémoire dans ~/claude-macos-app trouvée aussi par une copie de dépôt ailleurs', not bloque(b.stop('S71', t4)[1]))
+ecrits = [subprocess.Popen(['bash', str(b.enveloppe), 'prompt'], stdin=subprocess.PIPE, text=True, env=b.env())
+          for _ in range(25)]
+for k, x in enumerate(ecrits):
+    x.stdin.write(json.dumps({'session_id': 'S72', 'prompt': f'demande {k}', 'transcript_path': t4})); x.stdin.close()
+[x.wait(timeout=30) for x in ecrits]
+try:
+    json.loads((b.etat / 'S72.json').read_text()); valide = True
+except ValueError:
+    valide = False
+verifie('30aj. 25 écritures simultanées de l\'état : jamais de JSON mélangé', valide and not list(b.etat.glob('S72.json.*')))
 verifie('30s3. état corrompu (types inattendus) : tamponne et Stop fonctionnent', r.returncode == 0 and 'S59' in r.stdout and rc == 0, [r.returncode, r.stdout, j])
 tpl2 = b.transcript('tpl2', [humain('a'), humain('b'), humain('c')])
 b.appel('prompt', {'session_id': 'S60', 'prompt': 'Point de contrôle : relire les PR', 'transcript_path': tpl2})
