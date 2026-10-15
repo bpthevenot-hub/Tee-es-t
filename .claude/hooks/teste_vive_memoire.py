@@ -1066,6 +1066,41 @@ restes = [x.name for x in (h14 / '.claude/hooks').iterdir()] + [x.name for x in 
 verifie('49. mise à jour par échange de dossiers : fichiers neufs, ajouts gardés, aucun reste',
         r.returncode == 0 and (h14 / '.claude/skills/vive-memoire/notes-perso.txt').exists()
         and 'VERSION' in (h14 / '.claude/hooks/vive-memoire/vive_memoire.py').read_text() and sorted(restes) == ['vive-memoire', 'vive-memoire'], restes)
+# mise à jour qui échoue en route : l'installation précédente reste entière
+h15 = b.racine / 'mac15'; h15.mkdir()
+installer(h15)
+inst15 = h15 / '.claude/hooks/vive-memoire'
+(inst15 / 'vive_memoire.py').write_text("VERSION = '0.1'\n")
+(inst15 / 'gros-perso.bin').write_bytes(b'x' * 2_000_000)
+r = subprocess.run(['bash', '-c', 'ulimit -f 1000; exec bash "$0"', str(ICI / 'installe-mac.sh')], capture_output=True, text=True,
+                   env=dict(BASE_ENV, HOME=str(h15)))
+taille = (inst15 / 'gros-perso.bin').stat().st_size if (inst15 / 'gros-perso.bin').exists() else -1
+verifie('50. fichier ajouté à la main impossible à recopier (disque plein) : mise à jour annulée, rien de perdu',
+        r.returncode != 0 and taille == 2_000_000 and (inst15 / 'vive_memoire.py').read_text() == "VERSION = '0.1'\n", [r.returncode, taille, r.stdout[-200:]])
+h16 = b.racine / 'mac16'; h16.mkdir()
+installer(h16)
+(h16 / '.claude/hooks/vive-memoire/vive_memoire.py').write_text("VERSION = '0.1'\n")
+(h16 / '.claude/skills/vive-memoire/SKILL.md').write_text('ancienne skill\n')
+faux = b.racine / 'faux-mv'; faux.mkdir()
+(faux / 'mv').write_text('#!/bin/bash\nfor x in "$@"; do last="$x"; done\ncase "$last" in */skills/vive-memoire) exit 1;; esac\nexec /bin/mv "$@"\n')
+os.chmod(faux / 'mv', 0o755)
+r = installer(h16, sup={'PATH': str(faux) + os.pathsep + BASE_ENV.get('PATH', '')})
+restes16 = sorted(x.name for x in (h16 / '.claude/hooks').iterdir()) + sorted(x.name for x in (h16 / '.claude/skills').iterdir())
+verifie('51. échange de la skill impossible après celui des hooks : les deux reviennent à l\'ancienne version',
+        r.returncode != 0 and (h16 / '.claude/hooks/vive-memoire/vive_memoire.py').read_text() == "VERSION = '0.1'\n"
+        and (h16 / '.claude/skills/vive-memoire/SKILL.md').read_text() == 'ancienne skill\n' and restes16 == ['vive-memoire', 'vive-memoire'],
+        [r.returncode, restes16, r.stdout[-200:]])
+# ancien fichier de dettes partagé : effacements simultanés sérialisés
+etat17 = b.racine / 'etat-dettes-anciennes'; etat17.mkdir()
+perdus = 0
+for tour in range(3):
+    noms = [f'L{tour}-{k}' for k in range(16)]
+    (etat17 / 'dette.json').write_text(json.dumps({n: {'nb': 5, 'date': 'x', 't': 0} for n in noms}))
+    code = "import sys; n = sys.argv[-1]; sys.argv = ['x']; sys.path.insert(0, %r); import vive_memoire as m; m.effacer_dette(n)" % str(b.hooks)
+    lots = [subprocess.Popen([sys.executable, '-I', '-c', code, n], env=b.env({'VM_ETAT': str(etat17)})) for n in noms]
+    [x.wait(timeout=60) for x in lots]
+    perdus += len(json.loads((etat17 / 'dette.json').read_text()))
+verifie('30cc. ancien fichier de dettes : 16 effacements simultanés, aucun ne revient', perdus == 0, perdus)
 shutil.rmtree(b.racine, ignore_errors=True)
 print(f'\n{total} vérifications, {len(echecs)} échec(s)')
 sys.exit(1 if echecs else 0)

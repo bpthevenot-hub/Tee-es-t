@@ -43,7 +43,7 @@ try:
 except ImportError:          # hors macOS / Linux : pas de sérialisation, le reste marche
     fcntl = None
 
-VERSION = '3.16'
+VERSION = '3.17'
 SEUIL_MIN = 4        # demandes humaines avant d'exiger une synthèse
 SEUIL_REFRESH = 8    # nouvelles demandes depuis la dernière synthèse (ou libération)
 MAX_RELANCES = 3     # blocages consécutifs avant de laisser finir
@@ -698,9 +698,10 @@ def effacer_dette(session: str) -> bool:
         efface = True
     except OSError:
         pass
-    ancien = lire_json(dossier_etat() / 'dette.json', {})
-    if isinstance(ancien, dict) and ancien.pop(session, None) is not None:
-        efface = ecrire_json(dossier_etat() / 'dette.json', ancien) or efface
+    with verrou_fichier(dossier_etat() / 'dette.json.verrou'):   # fichier partagé par toutes les sessions (format v3.1)
+        ancien = lire_json(dossier_etat() / 'dette.json', {})
+        if isinstance(ancien, dict) and ancien.pop(session, None) is not None:
+            efface = ecrire_json(dossier_etat() / 'dette.json', ancien) or efface
     return efface
 
 

@@ -43,24 +43,60 @@ installer_fichiers() {
   done
   [ -s "$prep/hooks/vive_memoire.py" ] && [ -s "$prep/hooks/vive-memoire-stop.sh" ] && [ -s "$prep/skill/SKILL.md" ] \
     || { rm -rf "$prep"; echo "Copie incomplète ; rien n'a été installé."; exit 1; }
-  # Remplacement d'un bloc : chaque dossier préparé prend la place de l'installé par renommage (même
-  # disque), avec retour à l'ancien en cas d'échec ; jamais de copie à moitié faite sous des hooks enregistrés.
+  # Fichiers ajoutés à la main dans l'installation actuelle : recopiés dans les dossiers préparés AVANT
+  # tout remplacement (les nôtres priment) ; une copie impossible (disque plein, fichier illisible)
+  # annule tout et laisse l'installation actuelle intacte.
+  for paire in "$cible_hooks:$prep/hooks" "$cible_skill:$prep/skill"; do
+    if [ -d "${paire%%:*}" ]; then
+      fusionner "${paire%%:*}" "${paire#*:}" \
+        || { rm -rf "$prep"; echo "Fichiers ajoutés à la main impossibles à recopier ; l'installation précédente est restée en place."; exit 1; }
+    fi
+  done
+  # Remplacement des deux dossiers comme une seule opération : anciens mis de côté, neufs posés par
+  # renommage (même disque) ; au moindre échec, tout revient à l'état d'avant (jamais des hooks neufs
+  # avec une skill ancienne).
   mkdir -p "$config/hooks" "$config/skills"
-  echanger "$prep/hooks" "$cible_hooks" && echanger "$prep/skill" "$cible_skill" \
-    || { rm -rf "$prep"; echo "Remplacement impossible ; l'installation précédente est restée en place."; exit 1; }
+  if ! echanger_tout; then
+    rm -rf "$prep"; echo "Remplacement impossible ; l'installation précédente est restée en place."; exit 1
+  fi
   rm -rf "$prep"
 }
-echanger() {   # echanger <dossier préparé> <dossier installé>
-  if [ -d "$2" ]; then
-    cp -Rn "$2/." "$1/" 2>/dev/null || true      # fichiers ajoutés à la main : gardés (les nôtres priment)
-    mv "$2" "$2.ancien.$$" || return 1
+fusionner() {   # fusionner <installé> <préparé> : copie ce qui manque au préparé ; code 1 sur toute erreur
+python3 - "$1" "$2" <<'PYEOF2'
+import os, shutil, sys
+src, dst = sys.argv[1], sys.argv[2]
+try:
+    for racine, dossiers, fichiers in os.walk(src):
+        cible = os.path.normpath(os.path.join(dst, os.path.relpath(racine, src)))
+        os.makedirs(cible, exist_ok=True)
+        for nom in list(dossiers) + fichiers:
+            de, vers = os.path.join(racine, nom), os.path.join(cible, nom)
+            if os.path.islink(de):
+                if nom in dossiers:
+                    dossiers.remove(nom)
+                if not os.path.lexists(vers):
+                    os.symlink(os.readlink(de), vers)
+            elif nom in fichiers and not os.path.lexists(vers):
+                shutil.copy2(de, vers)
+except OSError as erreur:
+    sys.exit(f'{erreur}')
+PYEOF2
+}
+echanger_tout() {   # remplace $cible_hooks et $cible_skill par les dossiers préparés, ou rien
+  local mis_h= mis_s= pose_h= pose_s= ok=1
+  if [ -d "$cible_hooks" ]; then mv "$cible_hooks" "$cible_hooks.ancien.$$" && mis_h=1 || ok=; fi
+  if [ -n "$ok" ] && [ -d "$cible_skill" ]; then mv "$cible_skill" "$cible_skill.ancien.$$" && mis_s=1 || ok=; fi
+  if [ -n "$ok" ]; then mv "$prep/hooks" "$cible_hooks" && pose_h=1 || ok=; fi
+  if [ -n "$ok" ]; then mv "$prep/skill" "$cible_skill" && pose_s=1 || ok=; fi
+  if [ -n "$ok" ]; then
+    rm -rf "$cible_hooks.ancien.$$" "$cible_skill.ancien.$$"
+    return 0
   fi
-  if mv "$1" "$2"; then
-    rm -rf "$2.ancien.$$"
-  else
-    if [ -d "$2.ancien.$$" ]; then mv "$2.ancien.$$" "$2"; fi
-    return 1
-  fi
+  if [ -n "$pose_s" ]; then rm -rf "$cible_skill"; fi
+  if [ -n "$pose_h" ]; then rm -rf "$cible_hooks"; fi
+  if [ -n "$mis_h" ]; then /bin/mv "$cible_hooks.ancien.$$" "$cible_hooks"; fi
+  if [ -n "$mis_s" ]; then /bin/mv "$cible_skill.ancien.$$" "$cible_skill"; fi
+  return 1
 }
 enregistrer() {
 python3 - "$reglages" "$cible_hooks" "${1:-}" <<'PYEOF'
