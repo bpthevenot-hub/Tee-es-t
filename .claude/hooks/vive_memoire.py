@@ -8,13 +8,17 @@ Modes (appelés par les enveloppes bash de ce dossier, ou à la main) :
 
 Où ça marche (doc Claude Code, vérifiée le 14/10/2026) : hooks d'un dépôt dans une session
 locale ou dans une session cloud ouverte sur CE SEUL dépôt ; hooks utilisateur sur le Mac
-(installe-mac.sh). Une session cloud ouverte sur plusieurs dépôts ne charge aucun hook :
-seule la consigne des CLAUDE.md s'applique (D-019).
+(installe-mac.sh). Une session cloud hébergée par Anthropic ouverte sur plusieurs dépôts ne
+charge ni les hooks des dépôts ni les réglages utilisateur (seuls d'éventuels hooks gérés par
+une organisation s'y appliquent) : seule la consigne des CLAUDE.md s'applique (D-019).
 
-Garanties : ne bloque jamais sur une erreur (toute exception rend la main sans bloquer),
-au plus 3 relances consécutives puis libération mémorisée + dette rappelée au démarrage
-suivant, état propre à chaque session, ne compte que les demandes humaines de la branche
-active (pas les tours abandonnés par /rewind).
+Garanties : ne bloque jamais sur une erreur (toute exception rend la main sans bloquer ;
+« tamponne » signale la sienne), au plus 3 relances consécutives puis libération mémorisée
++ dette rappelée sur la même machine (au démarrage d'une autre session plus d'une heure après,
+ou à la reprise de la même ; pas en cloud, où le conteneur ne survit pas), état propre à
+chaque session, ne compte que les demandes humaines de la branche active (pas les tours
+abandonnés par /rewind). Une seule copie agit par session : la copie utilisateur, quand elle
+tourne vraiment (marque par session), sinon celle du dépôt.
 État : $VM_ETAT ou ~/.claude/vive-memoire/ (jamais dans un dépôt). Python 3.8+.
 """
 from __future__ import annotations
@@ -27,7 +31,9 @@ import re
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
+VERSION = '3.5'
 SEUIL_MIN = 4        # demandes humaines avant d'exiger une synthèse
 SEUIL_REFRESH = 8    # nouvelles demandes depuis la dernière synthèse (ou libération)
 MAX_RELANCES = 3     # blocages consécutifs avant de laisser finir
@@ -38,6 +44,14 @@ TECHNIQUE = ('<task-notification>', '<local-command', '<command-name>', '<comman
              '<system-reminder>', '[Image:', '[SYSTEM NOTIFICATION', 'Continue from where you left off',
              'Stop hook feedback', 'Vive mémoire :', '<github-webhook-activity>', '<wake ',
              '<webhook-payload', '<scheduled', '<agent-message', '<child-session-event')
+
+
+HUMAINES = ('human', 'channel')   # envoi tapé par Baptiste, ici ou depuis un canal (Discord, Telegram…)
+
+
+def humaine(x: dict) -> bool:
+    origine = x.get('origin')
+    return isinstance(origine, dict) and origine.get('kind') in HUMAINES
 
 
 def dossier_config() -> Path:
@@ -55,8 +69,19 @@ def nom_sur(session: str) -> str:
 def lire_json(chemin: Path, defaut):
     try:
         return json.loads(chemin.read_text(encoding='utf-8'))
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return defaut
+
+
+def entier(valeur, defaut: int = -1) -> int:
+    try:
+        return int(valeur)
+    except (TypeError, ValueError):
+        return defaut
+
+
+def liste(valeur) -> list:
+    return [x for x in valeur if isinstance(x, dict)] if isinstance(valeur, list) else []
 
 
 def ecrire_json(chemin: Path, valeur) -> bool:
@@ -86,30 +111,52 @@ def texte_de(contenu) -> str:
 
 
 def chaine_active(liens: dict, feuille):
-    """uuids des ancêtres de « feuille » (parentUuid, et logicalParentUuid à travers une
-    compaction). None si la chaîne est rompue : on ne filtre rien."""
-    vus, u = set(), feuille
+    """(uuids des ancêtres de « feuille », coupure) en suivant parentUuid, et logicalParentUuid à
+    travers une compaction. Chaîne rompue (parent absent du fichier) : (None, -1), on ne filtre rien.
+    Compaction dont l'amont manque au fichier : coupure = sa position, rien n'est filtré avant."""
+    vus, u, coupure = set(), feuille, -1
     while u and u not in vus:
         if u not in liens:
-            return None
+            return None, -1
         vus.add(u)
-        direct, logique = liens[u]
+        direct, logique, debut = liens[u]
+        if not direct and logique and logique not in liens:
+            coupure = debut
         u = direct or (logique if logique in liens else None)
-    return vus or None
+    return (vus or None), coupure
+
+
+def invite(o: dict) -> bool:
+    """Entrée qui porte une invite (ce que UserPromptSubmit a vu), quelle qu'en soit l'origine :
+    commande en file, ou entrée « user » qui n'est ni un retour d'outil, ni un résumé, ni une méta."""
+    a = o.get('attachment')
+    if o.get('type') == 'queued_command' or (isinstance(a, dict) and a.get('type') == 'queued_command'):
+        return True
+    if o.get('type') != 'user' or o.get('isCompactSummary') or (o.get('isMeta') and not humaine(o)):
+        return False
+    m = o.get('message') if isinstance(o.get('message'), dict) else {}
+    contenu = m.get('content')
+    if isinstance(contenu, list):
+        return bool(contenu) and not any(isinstance(x, dict) and x.get('type') == 'tool_result' for x in contenu)
+    return bool(str(contenu or '').strip())
 
 
 def analyser_transcript(chemin: str):
-    """(demandes humaines, position de chaque demande dans le fichier, {session mère: demandes héritées}).
+    """Analyse : nb (demandes humaines), positions (octet de chaque demande dans le fichier),
+    parents ({session mère: demandes héritées}), liens, active, ancre, unites (pour « couvertes »).
 
-    Une demande = un envoi distinct de Baptiste : entrée « user » d'origine « human » (son uuid,
-    plus les envois antérieurs qu'elle fusionne : mergedSendUuids), ou commande envoyée en cours
-    de tour (queued_command humanTurn, source_uuid). Une image seule compte aussi.
+    Une demande = un envoi distinct de Baptiste : entrée « user » d'origine « human » ou
+    « channel » (son uuid, plus les envois antérieurs qu'elle fusionne : mergedSendUuids), ou
+    commande envoyée en cours de tour (queued_command humanTurn ou d'origine humaine, source_uuid).
+    Une image seule compte aussi.
     Entrées sans champ « origin » (anciennes versions, avant la première entrée qui en porte un) :
     repli par préfixes techniques, additionné.
     Seule compte la branche active : après /rewind, les tours abandonnés restent dans le fichier.
-    Elle se remonte depuis la dernière demande tapée (une feuille quelconque peut être le résultat
-    latéral d'un appel d'outil parallèle) ; ce qui est écrit après cette demande compte toujours."""
-    liens, candidats, avec_origine, ancre = {}, [], False, None
+    Elle se remonte depuis l'ancre, la plus récente de : dernière entrée assistant, feuille notée
+    par Claude Code (last-prompt.leafUuid), dernière demande tapée (une feuille quelconque peut être
+    le résultat latéral d'un appel d'outil parallèle) ; ce qui est écrit après l'ancre compte toujours."""
+    liens, candidats, avec_origine, ids_prompt, ecrits = {}, [], False, set(), []
+    tapee = assistant = feuille_cc = ''
     try:
         with open(chemin, 'rb') as f:
             fin = 0
@@ -117,55 +164,84 @@ def analyser_transcript(chemin: str):
                 debut, fin = fin, fin + len(brute)
                 try:
                     o = json.loads(brute.decode('utf-8', 'replace'))
-                except ValueError:
+                except (ValueError, RecursionError):
                     continue
                 if not isinstance(o, dict):
                     continue
                 uuid = str(o.get('uuid') or '')
                 if uuid and not o.get('isSidechain'):
-                    liens[uuid] = (str(o.get('parentUuid') or ''), str(o.get('logicalParentUuid') or ''))
+                    liens[uuid] = (str(o.get('parentUuid') or ''), str(o.get('logicalParentUuid') or ''), debut)
+                    if o.get('type') == 'assistant':
+                        assistant = uuid
+                if o.get('type') == 'last-prompt' and o.get('leafUuid'):
+                    feuille_cc = str(o.get('leafUuid'))
+                if o.get('promptId'):
+                    ids_prompt.add(str(o.get('promptId')))
                 fourche = o.get('forkedFrom')
                 mere = str(fourche.get('sessionId')) if isinstance(fourche, dict) and fourche.get('sessionId') else ''
                 cles = None                    # None : pas une demande ; [] : demande du repli, sans clé
                 a = o.get('attachment')
+                if invite(o):
+                    ecrits.append(debut)       # toute invite écrite, humaine ou non (tour planifié…)
                 if o.get('type') == 'queued_command':          # format récent : commande en file au premier niveau
                     texte_file = texte_de(o.get('prompt')) or str(o.get('prompt') or '')
-                    origine_file = o.get('origin')
-                    if (isinstance(origine_file, dict) and origine_file.get('kind') == 'human') or str(o.get('humanTurn')).lower() == 'true':
+                    if humaine(o) or str(o.get('humanTurn')).lower() == 'true':
                         cles = [str(o.get('source_uuid') or o.get('uuid') or empreinte(texte_file))]
                 elif isinstance(a, dict):
-                    if a.get('type') == 'queued_command' and str(a.get('humanTurn')).lower() == 'true':
+                    if a.get('type') == 'queued_command' and (str(a.get('humanTurn')).lower() == 'true'
+                                                              or (humaine(a) and not a.get('isMeta'))):
                         cles = [str(a.get('source_uuid') or a.get('delivery_id') or empreinte(str(a.get('prompt'))))]
-                elif o.get('type') == 'user' and not o.get('isMeta') and not o.get('isCompactSummary'):
+                elif (o.get('type') == 'user' and not o.get('isCompactSummary')
+                      and (not o.get('isMeta') or (humaine(o) and o['origin'].get('kind') == 'channel'))):
+                    # isMeta : retours de hook, rappels… sauf un message reçu par un canal (isMeta, origin channel)
                     m = o.get('message') if isinstance(o.get('message'), dict) else {}
                     contenu = m.get('content')
                     t = texte_de(contenu).strip()
                     origine = o.get('origin')
                     if isinstance(origine, dict):
                         avec_origine = True
-                        if origine.get('kind') == 'human' and (t or contenu):
+                        if origine.get('kind') in HUMAINES and (t or contenu):
                             fusion = o.get('mergedSendUuids')
                             cles = [uuid or empreinte(t or json.dumps(contenu)[:200])]
                             cles += [str(x) for x in fusion] if isinstance(fusion, list) else []
                             if uuid:
-                                ancre = (uuid, debut)
+                                tapee = uuid
                     elif t and not avec_origine and not t.startswith(TECHNIQUE):
                         cles = []
                 if cles is not None:
                     candidats.append((uuid, cles, debut, mere))
     except OSError:
         pass
-    active = chaine_active(liens, ancre[0]) if ancre else None
-    envois, positions, herites = set(), [], {}
+    ancre = max((u for u in (assistant, feuille_cc, tapee) if u in liens), key=lambda u: liens[u][2], default='')
+    active, coupure = chaine_active(liens, ancre) if ancre else (None, -1)
+    envois, positions, unites, herites = set(), [], [], {}
     for uuid, cles, debut, mere in candidats:
-        if active is not None and uuid in liens and uuid not in active and debut < ancre[1]:
+        if active is not None and uuid in liens and uuid not in active and coupure < debut < liens[ancre][2]:
             continue                           # tour abandonné par /rewind
         nouvelles = [c for c in dict.fromkeys(cles) if c not in envois] if cles else [None]
         envois.update(c for c in nouvelles if c)
         positions += [debut] * len(nouvelles)
+        unites += [(uuid, debut)] * len(nouvelles)
         if mere and cles:
             herites.setdefault(mere, set()).update(cles)
-    return len(positions), positions, {mere: len(c) for mere, c in herites.items()}
+    return SimpleNamespace(nb=len(positions), positions=positions, unites=unites, liens=liens, active=active,
+                           ancre=ancre, ids_prompt=ids_prompt, ecrits=ecrits, parents={mere: len(c) for mere, c in herites.items()})
+
+
+def couvertes(a, ancre: str, n: int) -> int:
+    """Demandes déjà couvertes par une synthèse (ou une libération) faite à « ancre » quand la
+    discussion comptait n demandes. Ancre sur la branche active, inconnue ou chaîne rompue : n.
+    Ancre abandonnée par /rewind : seules les demandes actives qui en sont des ancêtres. Ancre
+    absente d'un transcript lisible (fichier reconstruit depuis une compaction plus récente) : 0."""
+    if n < 0 or not ancre or a.active is None:
+        return n
+    if ancre not in a.liens:
+        return 0
+    if ancre in a.active:
+        return n
+    ancetres = chaine_active(a.liens, ancre)[0] or set()
+    limite = a.liens[ancre][2]
+    return min(n, sum(1 for u, debut in a.unites if ((u in ancetres) if u in a.liens else debut <= limite)))
 
 
 def dossier_projets() -> Path:
@@ -178,18 +254,20 @@ def trouver_transcript(session: str) -> str:
     return trouves[0] if trouves else ''
 
 
-def compter(etat: dict, transcript: str, avec_attente: bool = True):
-    nb, positions, _ = analyser_transcript(transcript)
+def compter(etat: dict, a, avec_attente: bool = True):
+    nb = a.nb
     if not avec_attente:
         return nb
     # Demandes envoyées depuis le dernier Stop mais pas encore écrites au transcript (écriture
-    # différée). Chacune porte la taille du transcript à son envoi : ce qui est écrit après cette
-    # position lui répond (quel qu'en soit le texte ou l'identifiant), le reste est en attente.
-    notees = sorted((p for p in etat.get('prompts') or [] if isinstance(p, dict) and isinstance(p.get('pos'), int)),
-                    key=lambda p: p['pos'])
+    # différée). Chacune porte la taille du transcript à son envoi : toute invite écrite après cette
+    # position lui répond (quels qu'en soient le texte, l'identifiant ou l'origine : un tour
+    # planifié écrit ne compte pas comme une demande), le reste est en attente.
+    # Une demande dont l'identifiant figure au transcript y est écrite (même sous une autre forme).
+    notees = sorted((p for p in liste(etat.get('prompts')) if isinstance(p.get('pos'), int)
+                     and not (p.get('id') and p['id'] in a.ids_prompt)), key=lambda p: p['pos'])
     attente = 0
     for i, p in enumerate(notees):
-        ecrites = sum(1 for x in positions if x >= p['pos'])
+        ecrites = sum(1 for x in a.ecrits if x >= p['pos'])
         attente = max(attente, len(notees) - i - ecrites)
     return nb + attente
 
@@ -226,11 +304,12 @@ def tampon_durable(session: str) -> int:
 def reference_session(session: str) -> int:
     etat = lire_json(dossier_etat() / (nom_sur(session) + '.json'), {})
     etat = etat if isinstance(etat, dict) else {}
-    return max(int(etat.get('tampon', -1)), int(etat.get('libere_a', -1)), tampon_durable(session))
+    return max(entier(etat.get('tampon')), entier(etat.get('libere_a')), tampon_durable(session))
 
 
 def chemin_skill() -> str:
-    for c in ([ICI.parent / 'skills/vive-memoire/SKILL.md', Path.home() / '.claude/skills/vive-memoire/SKILL.md']
+    for c in ([ICI.parent / 'skills/vive-memoire/SKILL.md', ICI.parents[1] / 'skills/vive-memoire/SKILL.md',
+               dossier_config() / 'skills/vive-memoire/SKILL.md']
               + [m / 'skills/vive-memoire/SKILL.md' for m in chemins_memoire()]):
         if c.exists():
             return str(c)
@@ -251,7 +330,7 @@ def mode_prompt(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
             pos = os.path.getsize(chemin) if chemin else 0
         except OSError:
             pos = 0                            # transcript pas encore créé (première demande)
-        etat['prompts'] = [p for p in etat.get('prompts') or [] if isinstance(p, dict) and 'pos' in p][-19:] + [{'pos': pos}]
+        etat['prompts'] = [p for p in liste(etat.get('prompts')) if 'pos' in p][-19:] + [{'pos': pos, 'id': str(entree.get('prompt_id') or '')}]
         ecrire_json(f_etat, etat)
     return 0
 
@@ -268,19 +347,25 @@ def mode_tamponne(session: str, transcript: str) -> int:
             return 0
         print(f'Vive mémoire : transcript de la session {session} introuvable (dossier {dossier_projets()}) ; rien n\'a été tamponné.')
         return 1
-    nb = compter(etat, chemin)
-    _, _, parents = analyser_transcript(chemin)
-    etat.update({'tampon': nb, 'relances': 0, 'date_tampon': time.strftime('%Y-%m-%d %H:%M')})
+    a = analyser_transcript(chemin)
+    nb, parents = compter(etat, a), a.parents
+    etat.update({'tampon': nb, 'ancre_tampon': a.ancre, 'relances': 0, 'date_tampon': time.strftime('%Y-%m-%d %H:%M')})
     ok = ecrire_json(f_etat, etat)
     if ok:                                 # sans tampon écrit, la dette reste pour le rappel suivant
         effacer_dette(session)
         for mere, herite in parents.items():   # une fourche synthétisée couvre ce qu'elle a hérité de sa mère
-            if isinstance(dette.get(mere), dict) and int(dette[mere].get('nb', 0)) <= herite:
+            if isinstance(dette.get(mere), dict) and entier(dette[mere].get('nb'), 0) <= herite:
                 effacer_dette(mere)
     print(f'Vive mémoire : synthèse enregistrée pour la session {session} ({nb} demandes)'
           + ('' if ok else ' — ATTENTION : état non inscriptible, rien n\'a été écrit') + '.')
     print(f'Inscris aussi « Session : {session} » et « Demandes : {nb} » dans le compte rendu de session.')
     return 0 if ok else 1
+
+
+def synthese_connue(session: str) -> int:
+    """Plus grand tampon connu d'une session (état ou compte rendu durable), libération exclue."""
+    etat = lire_json(dossier_etat() / (nom_sur(session) + '.json'), {})
+    return max(entier(etat.get('tampon')) if isinstance(etat, dict) else -1, tampon_durable(session))
 
 
 def mode_debut(session: str, source: str) -> int:
@@ -290,9 +375,12 @@ def mode_debut(session: str, source: str) -> int:
     for s, v in dette.items():
         if not isinstance(v, dict):
             continue
+        if synthese_connue(s) >= entier(v.get('nb'), 0):
+            effacer_dette(s)                 # la synthèse a été faite depuis (tampon ou compte rendu)
+            continue
         if s == session and source == 'resume':
             dues[s] = v                      # on reprend la discussion qui doit sa synthèse
-        elif s != session and maintenant - float(v.get('t', 0)) > 3600:
+        elif s != session and maintenant - entier(v.get('t'), 0) > 3600:
             dues[s] = v                      # une autre session, abandonnée depuis plus d'une heure
     if dues:
         lignes = [f'- session {s} : {v.get("nb", "?")} demandes, le {v.get("date", "?")}, sans synthèse' for s, v in dues.items()]
@@ -341,12 +429,28 @@ def effacer_dette(session: str) -> bool:
 def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     chemin = str(entree.get('transcript_path') or '') or etat.get('transcript') or trouver_transcript(session)
     etat['transcript'] = chemin
-    _, _, parents = analyser_transcript(chemin)
+    a = analyser_transcript(chemin)
     planifie = any(isinstance(x, dict) for x in entree.get('session_crons') or [])
-    nb = compter(etat, chemin, avec_attente=not planifie)   # un tour planifié n'est pas une demande de Baptiste
+    nb = compter(etat, a, avec_attente=not planifie)   # un tour planifié n'est pas une demande de Baptiste
     etat['prompts'] = []      # au Stop suivant, ces demandes-là sont au transcript (ou ne le seront jamais)
-    reference = max([int(etat.get('tampon', -1)), int(etat.get('libere_a', -1)), tampon_durable(session)]
-                    + [min(reference_session(p), n) for p, n in parents.items() if p != session])
+    # Références : tampon et libération ramenés à la branche active (après /rewind, seules les
+    # demandes encore actives restent couvertes) ; le compte rendu durable ne compte que s'il est
+    # plus récent que l'état (sinon c'est la même synthèse, déjà ramenée).
+    brut = max(entier(etat.get('tampon')), entier(etat.get('libere_a')))
+    durable = tampon_durable(session)
+    if durable <= max(brut, entier(etat.get('durable_vu'))):
+        durable = -1
+    elif durable > nb and a.ancre:
+        # Compte rendu plus grand que le transcript (fichier reconstruit depuis une compaction) :
+        # on repart d'ici, une fois pour toutes, plutôt que de masquer les demandes à venir.
+        etat.update({'tampon': nb, 'ancre_tampon': a.ancre, 'durable_vu': durable})
+        durable = -1
+    synthese = max([couvertes(a, str(etat.get('ancre_tampon') or ''), entier(etat.get('tampon'))), durable]
+                   + [min(reference_session(p), n) for p, n in a.parents.items() if p != session])
+    reference = max(synthese, couvertes(a, str(etat.get('ancre_libere') or ''), entier(etat.get('libere_a'))))
+    dette = lire_dettes().get(session)
+    if synthese >= 0 and isinstance(dette, dict) and entier(dette.get('nb'), 0) <= synthese:
+        effacer_dette(session)       # synthèse reconnue (même sans « tamponne ») : plus de rappel
     due = nb >= SEUIL_MIN and not (reference >= 0 and nb - reference < SEUIL_REFRESH)
     # Pause quand la session attend du travail né depuis la dernière demande humaine (tâche en
     # cours ou en file, réveil ponctuel planifié). Une attente plus ancienne (serveur de dev,
@@ -358,7 +462,8 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     for x in entree.get('session_crons') or []:
         if isinstance(x, dict):
             attente.add('c:' + str(x.get('id') or x.get('prompt') or len(attente)))
-    vues = {k: int(n) for k, n in (etat.get('pause') or {}).items() if k in attente}
+    pause = etat.get('pause') if isinstance(etat.get('pause'), dict) else {}
+    vues = {k: entier(n, nb) for k, n in pause.items() if k in attente}
     for k in attente:
         vues.setdefault(k, nb)
     etat['pause'] = vues
@@ -369,13 +474,13 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
         ecrire_json(f_etat, etat)
         return 0
     if not due:
-        if etat.get('relances'):
+        if entier(etat.get('relances'), 0):
             etat['relances'] = 0
         ecrire_json(f_etat, etat)
         return 0
-    relances = int(etat.get('relances', 0))
+    relances = entier(etat.get('relances'), 0)
     if relances >= MAX_RELANCES:
-        etat.update({'relances': 0, 'libere_a': nb})
+        etat.update({'relances': 0, 'libere_a': nb, 'ancre_libere': a.ancre})
         ecrire_json(f_etat, etat)
         noter_dette(session, nb)
         ou = ('en cloud, le rappel ne survit pas au conteneur : ajoute « Synthèse due : session ' + session + ' » en P0 de next-actions.md'
@@ -397,6 +502,23 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     return 0
 
 
+def version_de(fichier: Path) -> tuple:
+    try:
+        m = re.search(r"^VERSION = '([0-9.]+)'", fichier.read_text(encoding='utf-8', errors='replace'), re.M)
+    except OSError:
+        return ()
+    return tuple(int(x) for x in m.group(1).split('.') if x) if m else (0,)
+
+
+def signaler_version(installee: Path) -> None:
+    """Copie utilisateur plus ancienne que celle du dépôt : le dire (jamais l'inverse, pour ne pas
+    pousser à réinstaller une version plus ancienne depuis un vieux checkout)."""
+    v = version_de(installee)
+    if v and v < version_de(Path(__file__)):
+        print(f'Vive mémoire : la copie installée dans {installee.parent} (version {".".join(map(str, v))}) est plus ancienne '
+              f'que celle du dépôt ({VERSION}) ; relance « bash {ICI / "installe-mac.sh"} » pour la mettre à jour.')
+
+
 def main() -> int:
     mode = sys.argv[1] if len(sys.argv) > 1 else 'stop'
     if mode == 'tamponne':
@@ -412,6 +534,23 @@ def main() -> int:
     session = str(entree.get('session_id') or '')
     if not session:
         return 0
+    # Une seule copie agit par session. L'enveloppe dit laquelle on est : « utilisateur » (copie
+    # installée dans la config) pose une marque pour la session ; « doublon » (copie d'un dépôt
+    # alors qu'une installation utilisateur est enregistrée) se tait seulement si cette marque
+    # existe : réglages utilisateur illisibles ou non chargés (--setting-sources) = elle agit.
+    copie = os.environ.get('VM_COPIE', '')
+    marque = dossier_etat() / 'actifs' / nom_sur(session)
+    if copie == 'utilisateur':
+        try:
+            marque.parent.mkdir(parents=True, exist_ok=True)
+            marque.touch()
+        except OSError:
+            pass
+    elif copie == 'doublon':
+        if mode == 'debut':
+            signaler_version(Path(os.environ.get('VM_COPIE_UTILISATEUR') or ''))
+        if marque.exists():
+            return 0
     if mode == 'debut':
         return mode_debut(session, str(entree.get('source') or ''))
     f_etat = dossier_etat() / (nom_sur(session) + '.json')
@@ -425,8 +564,11 @@ def main() -> int:
 
 
 if __name__ == '__main__':
+    tampon = len(sys.argv) > 1 and sys.argv[1] == 'tamponne'
     try:
         code = main()
-    except Exception:          # jamais de blocage sur une erreur du hook
-        code = 0
-    sys.exit(code if len(sys.argv) > 1 and sys.argv[1] == 'tamponne' else 0)
+    except Exception as erreur:   # jamais de blocage sur une erreur du hook ; « tamponne » le dit
+        code = 1
+        if tampon:
+            print(f'Vive mémoire : erreur pendant le tampon ({type(erreur).__name__}) ; rien n\'a été tamponné, la dette reste.')
+    sys.exit(code if tampon else 0)

@@ -192,14 +192,21 @@ for f in ('vive_memoire.py', 'vive-memoire-stop.sh'):
     shutil.copy(ICI / f, inst / f)
 verifie('29a. fichiers utilisateur sans enregistrement : la copie du dépôt reste active', bloque(b.stop('S19', t4)[1]))
 (b.home / '.claude/settings.json').write_text(json.dumps({'hooks': {'Stop': [{'hooks': [{'command': f'bash "{inst}/vive-memoire-stop.sh" stop'}]}]}}))
-verifie('29b. installation utilisateur enregistrée : la copie du dépôt se tait', b.stop('S20', t4)[1] == {})
+verifie('29b0. installation enregistrée mais pas chargée dans la session (aucune marque) : la copie du dépôt agit', bloque(b.stop('S20b', t4)[1]))
 rc, j, _, _ = b.appel('stop', {'session_id': 'S20', 'transcript_path': t4}, enveloppe=inst / 'vive-memoire-stop.sh')
-verifie('29c. … et la copie utilisateur prend le relais', bloque(j), j)
+verifie('29c. la copie utilisateur agit (et pose sa marque)', bloque(j) and (b.etat / 'actifs/S20').exists(), j)
+verifie('29b. … alors la copie du dépôt se tait pour cette session', b.stop('S20', t4)[1] == {})
+(b.home / '.claude/settings.json').write_text('{\n  // mes réglages\n' + json.dumps({'hooks': {'Stop': [{'hooks': [{'command': f'bash "{inst}/vive-memoire-stop.sh" stop'}]}]}})[1:])
+verifie('29b2. réglages utilisateur invalides (Claude Code les ignore) : la copie du dépôt agit', bloque(b.stop('S20c', t4)[1]))
 rc, j, _, _ = b.appel('stop', {'session_id': 'S21', 'transcript_path': t4}, {'CLAUDE_CODE_REMOTE': '1'})
 verifie('29d. en cloud, la copie du dépôt ne se tait jamais', bloque(j), j)
-(inst / 'vive_memoire.py').write_text('# ancienne version\n')
+(b.home / '.claude/settings.json').write_text(json.dumps({'hooks': {'Stop': [{'hooks': [{'command': f'bash "{inst}/vive-memoire-stop.sh" stop'}]}]}}))
+(inst / 'vive_memoire.py').write_text("# ancienne version\nVERSION = '3.1'\n")
 rc, j, out, _ = b.appel('debut', {'session_id': 'S20', 'source': 'startup'})
-verifie('29e. copie utilisateur périmée : signalée au démarrage', 'diffère' in out, out[:200])
+verifie('29e. copie utilisateur plus ancienne : signalée au démarrage', 'plus ancienne' in out, out[:200])
+(inst / 'vive_memoire.py').write_text("VERSION = '99.0'\n")
+rc, j, out, _ = b.appel('debut', {'session_id': 'S20', 'source': 'startup'})
+verifie('29f. copie utilisateur plus récente que le dépôt : pas d\'invitation à « mettre à jour » en arrière', 'plus ancienne' not in out, out[:200])
 shutil.rmtree(b.home / '.claude/hooks'); (b.home / '.claude/settings.json').unlink()
 ti = b.transcript('ti', [humain('a'), humain('b'), humain('c'),
                          {'type': 'user', 'origin': {'kind': 'human'}, 'uuid': 'IMG', 'message': {'role': 'user', 'content': [{'type': 'image', 'source': {}}]}}])
@@ -297,6 +304,82 @@ shutil.copy(t4, proj / 'D1.jsonl')
 (b.etat / 'D1.json').mkdir()
 r = b.python('tamponne', 'D1')
 verifie('30s. tampon non inscriptible : la dette reste', r.returncode == 1 and 'D1' in b.dette(), [r.returncode, r.stdout, b.dette()])
+tor = b.transcript('tor', [humain('a'), humain('b'), humain('c'),
+                           {'type': 'attachment', 'attachment': {'type': 'queued_command', 'prompt': 'x', 'source_uuid': 'Z1', 'origin': {'kind': 'human'}}}])
+rc, j = b.stop('S48', tor)
+verifie('30u. commande en file d\'origine humaine sans humanTurn : comptée', bloque(j) and '4 demandes' in j.get('reason', ''), j)
+canal = {'type': 'user', 'isMeta': True, 'origin': {'kind': 'channel'}, 'userType': 'external', 'message': {'role': 'user', 'content': 'depuis Discord'}}
+rc, j = b.stop('S49', b.transcript('tcan', [humain('a'), humain('b'), humain('c'), canal]))
+verifie('30v. message reçu par un canal (isMeta, origin channel) : compté', bloque(j) and '4 demandes' in j.get('reason', ''), j)
+retour = {'type': 'user', 'isMeta': True, 'message': {'role': 'user', 'content': 'Stop hook feedback: synthèse'}}
+verifie('30v2. retour de hook (isMeta sans origin) : toujours exclu',
+        not bloque(b.stop('S50', b.transcript('tret', [humain('a'), humain('b'), humain('c'), retour]))[1]))
+def tours(prefixe, n, parent=None, debut=1):
+    sortie = []
+    for i in range(debut, debut + n):
+        sortie += [humain(prefixe + str(i), uuid=prefixe + 'h' + str(i), parentUuid=parent), assistant(prefixe + 'a' + str(i), prefixe + 'h' + str(i))]
+        parent = prefixe + 'a' + str(i)
+    return sortie
+trw = proj / 'S51.jsonl'
+trw.write_text('\n'.join(json.dumps(x) for x in tours('', 10)) + '\n')
+r = b.python('tamponne', 'S51')
+ajouter(str(trw), *tours('bis', 8, parent='a2', debut=3))
+rc, j = b.stop('S51', str(trw))
+verifie('30w. /rewind après une synthèse : la référence revient aux demandes encore actives',
+        '10 demandes' in r.stdout and bloque(j) and '10 demandes' in j.get('reason', ''), [r.stdout, j])
+trw2 = proj / 'S52.jsonl'
+trw2.write_text('\n'.join(json.dumps(x) for x in tours('', 10)) + '\n')
+b.python('tamponne', 'S52')
+ajouter(str(trw2), *tours('', 7, parent='a10', debut=11))
+verifie('30w2. sans /rewind, la synthèse garde toute sa portée (7 nouvelles : pas de relance)', not bloque(b.stop('S52', str(trw2))[1]))
+frontiere = lambda amont: {'type': 'system', 'subtype': 'compact_boundary', 'uuid': 'B', 'parentUuid': None, 'logicalParentUuid': amont}
+trb = proj / 'S53.jsonl'
+trb.write_text('\n'.join(json.dumps(x) for x in tours('', 12)) + '\n')
+b.python('tamponne', 'S53')
+trb.write_text('\n'.join(json.dumps(x) for x in [frontiere('a16')] + tours('r', 9, parent='B')) + '\n')
+rc, j = b.stop('S53', str(trb))
+verifie('30x. transcript reconstruit depuis une compaction : la synthèse d\'avant ne masque plus les demandes', bloque(j) and '9 demandes' in j.get('reason', ''), j)
+(mem / 'sessions/2026-10-14-e.md').write_text('Session : S54\nDemandes : 12\n')
+trd = b.transcript('trd', [frontiere('ailleurs')] + tours('r', 2, parent='B'))
+c1 = bloque(b.stop('S54', trd)[1])
+ajouter(trd, *tours('s', 6, parent='ra2'))
+c2 = bloque(b.stop('S54', trd)[1])
+ajouter(trd, *tours('t', 2, parent='sa6'))
+rc, j = b.stop('S54', trd)
+verifie('30x2. compte rendu durable plus grand que le transcript : on repart du transcript (relance après 8 nouvelles)',
+        not c1 and not c2 and bloque(j) and '10 demandes' in j.get('reason', ''), [c1, c2, j])
+tlp = b.transcript('tlp', tours('', 3) + [frontiere('MANQUE')] + tours('p', 2, parent='B'))
+rc, j = b.stop('S55', tlp)
+verifie('30y. compaction dont l\'amont manque, au milieu du fichier : rien n\'est perdu avant elle', bloque(j) and '5 demandes' in j.get('reason', ''), j)
+tid = b.transcript('tid', [humain('a', promptId='P1'), humain('b', promptId='P2'), humain('c', promptId='P3')])
+b.appel('prompt', {'session_id': 'S56', 'prompt': '/model opus', 'prompt_id': 'P4', 'transcript_path': tid})
+ajouter(tid, {'type': 'user', 'promptId': 'P4', 'message': {'role': 'user', 'content': '<command-name>/model</command-name>'}})
+verifie('30z. commande locale écrite sans origine humaine (même promptId) : pas comptée', not bloque(b.stop('S56', tid)[1]))
+trn = b.transcript('trn', tours('', 6) + [dict(notif('<task-notification> fin'), uuid='n1', parentUuid='a4'), assistant('a7', 'n1')])
+rc, j = b.stop('S57', trn)
+verifie('30r4. /rewind puis tour automatique sans demande tapée : branche active quand même', bloque(j) and '4 demandes' in j.get('reason', ''), j)
+profond = '[' * 200000 + ']' * 200000
+tdeep = b.racine / 'tdeep.jsonl'
+tdeep.write_text('\n'.join([profond] + [json.dumps(humain(x)) for x in 'abcd']) + '\n')
+rc, j = b.stop('S58', str(tdeep))
+verifie('30s2. ligne JSON trop imbriquée : ignorée, le reste compte', bloque(j) and '4 demandes' in j.get('reason', ''), j)
+(b.etat / 'S59.json').write_text(json.dumps({'prompts': 7, 'tampon': 'x', 'relances': None, 'pause': 3}))
+shutil.copy(t4, proj / 'S59.jsonl')
+r = b.python('tamponne', 'S59')
+rc, j = b.stop('S59', t4)
+verifie('30s3. état corrompu (types inattendus) : tamponne et Stop fonctionnent', r.returncode == 0 and 'S59' in r.stdout and rc == 0, [r.returncode, r.stdout, j])
+tpl2 = b.transcript('tpl2', [humain('a'), humain('b'), humain('c')])
+b.appel('prompt', {'session_id': 'S60', 'prompt': 'Point de contrôle : relire les PR', 'transcript_path': tpl2})
+ajouter(tpl2, {'type': 'user', 'origin': {'kind': 'scheduled'}, 'message': {'role': 'user', 'content': 'Point de contrôle : relire les PR'}})
+verifie('30m2. tour planifié écrit, sans tâche listée à ce Stop : pas compté', not bloque(b.stop('S60', tpl2)[1]))
+b.stop('S61', t4)
+(mem / 'sessions/2026-10-14-f.md').write_text('Session : S61\nDemandes : 4\n')
+rc, j = b.stop('S61', t4)
+verifie('30g2. synthèse reconnue par le compte rendu (sans tamponne) : dette effacée', not bloque(j) and 'S61' not in b.dette(), [j, b.dette()])
+b.poser_dette('S62', nb=4)
+(mem / 'sessions/2026-10-14-g.md').write_text('Session : S62\nDemandes : 4\n')
+rc, j, out, _ = b.appel('debut', {'session_id': 'S63', 'source': 'startup'})
+verifie('30g3. démarrage : dette déjà couverte par un compte rendu, pas rappelée', 'S62' not in out and 'S62' not in b.dette(), out[:200])
 rc, j, _, _ = b.appel('stop', 'pas du json')
 verifie('30a. entrée invalide : code 0, rien', rc == 0 and j == {}, j)
 verifie('30b. transcript illisible (dossier) : pas de blocage', not bloque(b.stop('S22', str(b.racine))[1]))
@@ -326,6 +409,56 @@ h2 = b.racine / 'mac2'; (h2 / '.claude').mkdir(parents=True); (h2 / '.claude/hoo
 r5 = subprocess.run(['bash', str(ICI / 'installe-mac.sh')], capture_output=True, text=True, env=dict(BASE_ENV, HOME=str(h2)))
 reg = (h2 / '.claude/settings.json').read_text() if (h2 / '.claude/settings.json').exists() else ''
 verifie('34. copie impossible : aucune commande enregistrée', r5.returncode != 0 and 'vive-memoire' not in reg, [r5.returncode, reg[:120]])
+def installer(home, *args, cwd=None, sup=None, script=None):
+    return subprocess.run(['bash', str(script or (ICI / 'installe-mac.sh')), *args], capture_output=True, text=True,
+                          cwd=cwd, env=dict(BASE_ENV, HOME=str(home), **(sup or {})))
+h3 = b.racine / 'mac3'; (h3 / '.claude').mkdir(parents=True)
+casse = '{\n  // commentaire\n  "model": "opus"\n}\n'
+(h3 / '.claude/settings.json').write_text(casse)
+r = installer(h3)
+verifie('35. réglages en JSON invalide : refus, fichier intact, rien d\'installé',
+        r.returncode != 0 and (h3 / '.claude/settings.json').read_text() == casse and not (h3 / '.claude/hooks/vive-memoire').exists(), [r.returncode, r.stderr[-200:]])
+forme = json.dumps({'hooks': {'Stop': {'pas': 'une liste'}}})
+(h3 / '.claude/settings.json').write_text(forme)
+r = installer(h3)
+verifie('36. forme inattendue des hooks : refus, fichier intact', r.returncode != 0 and (h3 / '.claude/settings.json').read_text() == forme, r.stderr[-200:])
+(h3 / '.claude/settings.json').write_text(json.dumps({'hooks': {'Stop': ['brut', {'hooks': ['brut2', {'command': 'echo v'}]}, {'matcher': 'x'}]}}))
+r = installer(h3)
+st = json.loads((h3 / '.claude/settings.json').read_text())['hooks']['Stop']
+verifie('36b. entrées voisines atypiques gardées telles quelles', r.returncode == 0 and 'brut' in st and {'matcher': 'x'} in st
+        and any(isinstance(g, dict) and g.get('hooks') == ['brut2', {'command': 'echo v'}] for g in st), [r.stderr[-200:], st])
+(h3 / '.claude/settings.json').write_text('{"note": "\\ud800", "model": "opus"}')
+r = installer(h3)
+txt = (h3 / '.claude/settings.json').read_text()
+verifie('37. texte non encodable (demi-paire) : écrit échappé, jamais un fichier vide', r.returncode == 0 and json.loads(txt).get('model') == 'opus', [r.stderr[-200:], txt[:80]])
+h4 = b.racine / 'mac4'; (h4 / '.claude').mkdir(parents=True)
+original = json.dumps({'model': 'sonnet'})
+(h4 / '.claude/settings.json').write_text(original)
+installer(h4); installer(h4)
+sauvegardes = sorted((h4 / '.claude').glob('settings.json.avant-vive-memoire.*'))
+verifie('38. deux installations dans la même seconde : la sauvegarde d\'origine survit',
+        len(sauvegardes) == 2 and any(x.read_text() == original for x in sauvegardes), [x.name for x in sauvegardes])
+h5 = b.racine / 'mac5'; (h5 / '.claude').mkdir(parents=True); (h5 / '.claude/settings.json').write_text(original)
+r = installer(h5, '--help')
+verifie('39. argument inconnu : usage, rien de modifié', r.returncode == 1 and (h5 / '.claude/settings.json').read_text() == original
+        and not (h5 / '.claude/hooks').exists() and not list((h5 / '.claude').glob('*.avant-vive-memoire.*')), r.stdout)
+arbre = b.racine / 'arbre/.claude/hooks'; arbre.mkdir(parents=True)
+for f in ('vive_memoire.py', 'vive-memoire-stop.sh', 'vive-memoire-prompt.sh', 'installe-mac.sh'):
+    shutil.copy(ICI / f, arbre / f)
+shutil.copy(next(c / 'SKILL.md' for c in (ICI, ICI.parent / 'skills/vive-memoire', ICI.parents[1] / 'docs/context/skills/vive-memoire') if (c / 'SKILL.md').exists()), arbre / 'SKILL.md')
+leurre = b.racine / 'leurre'; (leurre / 'hooks').mkdir(parents=True)
+h6 = b.racine / 'mac6'; h6.mkdir()
+r = installer(h6, cwd=str(arbre.parent), script='hooks/installe-mac.sh', sup={'CDPATH': str(leurre)})
+verifie('40. CDPATH exporté + chemin relatif : installation correcte', r.returncode == 0 and (h6 / '.claude/skills/vive-memoire/SKILL.md').exists(), [r.returncode, r.stdout[-200:], r.stderr[-200:]])
+ss = json.loads((h6 / '.claude/settings.json').read_text())['hooks']['SessionStart']
+verifie('41. SessionStart couvre aussi les fourches (fork)', any(g.get('matcher') == 'startup|resume|clear|fork' for g in ss), ss)
+cfg2 = b.racine / 'cfg2'
+r = installer(b.racine / 'mac7', sup={'CLAUDE_CONFIG_DIR': str(cfg2)})
+(cfg2 / 'vive-memoire/dettes').mkdir(parents=True)
+(cfg2 / 'vive-memoire/dettes/VX.json').write_text(json.dumps({'session': 'VX', 'nb': 5, 'date': 'x', 't': 0}))
+d = subprocess.run(['bash', str(cfg2 / 'hooks/vive-memoire/vive-memoire-stop.sh'), 'debut'], input=json.dumps({'session_id': 'VY', 'source': 'startup'}),
+                   capture_output=True, text=True, env=dict(BASE_ENV, HOME=str(b.racine / 'mac7'), CLAUDE_CONFIG_DIR=str(cfg2)))
+verifie('42. CLAUDE_CONFIG_DIR : la skill citée est celle de cette config', str(cfg2 / 'skills/vive-memoire/SKILL.md') in d.stdout, [r.returncode, d.stdout[:300]])
 shutil.rmtree(b.racine, ignore_errors=True)
 print(f'\n{total} vérifications, {len(echecs)} échec(s)')
 sys.exit(1 if echecs else 0)
