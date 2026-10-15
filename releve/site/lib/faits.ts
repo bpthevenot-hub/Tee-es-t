@@ -34,7 +34,7 @@ export const FAITS: Fait[] = [
   },
   {
     valeur: '1 sur 2',
-    texte: 'infirmières hospitalières ont quitté l’hôpital ou changé de métier dans les dix ans.',
+    texte: 'infirmières hospitalières, près d’une sur deux, ont quitté l’hôpital ou changé de métier dans les dix ans (ordre de grandeur arrondi).',
     source: 'DREES, Études & Résultats n° 1277, 2023',
     url: 'https://drees.solidarites-sante.gouv.fr',
     nature: 'mesuré',

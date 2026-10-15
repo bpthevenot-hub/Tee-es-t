@@ -14,7 +14,7 @@ export const QUADRANTS: Record<Quadrant, { nom: string; energie: 'haute' | 'bass
 export const SOIGNANT_DEMO = {
   prenom: 'Camille',
   profession: 'Infirmière de nuit, réanimation',
-  pair: { prenom: 'Dr Lefort', profession: 'médecin pair, formée DIU « Soigner les soignants », hors établissement' },
+  pair: { prenom: 'Anne', profession: 'médecin pair, formée DIU « Soigner les soignants », hors établissement' },
   prochainRdv: { jour: 'Jeudi', heure: '14 h 15', mode: 'téléphone', duree: '15 min' },
   semaineProtocole: 4,
   semainesProtocole: 10,
@@ -23,7 +23,7 @@ export const SOIGNANT_DEMO = {
     { jour: 'Lun', quadrant: 'prune' as Quadrant, phrase: 'Trois admissions à 3 h. Pas eu le temps de manger.' },
     { jour: 'Mar', quadrant: 'brique' as Quadrant, phrase: 'Famille agressive au box 4. Débriefé avec l’interne.' },
     { jour: 'Mer', quadrant: 'sauge' as Quadrant, phrase: 'Repos. Dormi neuf heures.' },
-    { jour: 'Jeu', quadrant: 'sauge' as Quadrant, phrase: 'Appel avec Dr Lefort. On a parlé du box 4.' },
+    { jour: 'Jeu', quadrant: 'sauge' as Quadrant, phrase: 'Appel avec Anne. On a parlé du box 4.' },
     { jour: 'Ven', quadrant: 'ambre' as Quadrant, phrase: 'Garde fluide. Équipe complète.' },
   ],
 }
@@ -43,7 +43,7 @@ export const FILE_ACTIVE: Dossier[] = [
   { code: 'R-0417', profession: 'IDE réanimation, nuit', etape: 4, semaine: 4, prochainRdv: 'Jeu 14 h 15', signale: true, demande: 'Je veux être rappelée avant vendredi.', derniereNote: 'Agression verbale box 4. Sommeil fragmenté. Consentement relais psychologue : non pour l’instant.' },
   { code: 'R-0402', profession: 'Médecin anesthésiste', etape: 3, semaine: 2, prochainRdv: 'Mar 7 h 30', signale: false, derniereNote: 'Deuxième contact. Évoque un EIGS d’octobre. Souhaite un pair hors région : fait.' },
   { code: 'R-0388', profession: 'Aide-soignante, SSR', etape: 5, semaine: 11, prochainRdv: 'Lun 12 h', signale: false, derniereNote: 'Retour d’arrêt long préparé avec la médecine du travail, à sa demande. Dernier créneau du protocole.' },
-  { code: 'R-0421', profession: 'Interne, urgences', etape: 2, semaine: 1, prochainRdv: 'À planifier', signale: false, derniereNote: 'Entrée après prise de poste de nuit. Premier contact sous 48 h : délai tenu (31 h).' },
+  { code: 'R-0421', profession: 'Interne, urgences', etape: 2, semaine: 1, prochainRdv: 'À planifier', signale: false, derniereNote: 'Entrée après prise de poste de nuit. Premier contact pris le lendemain.' },
   { code: 'R-0395', profession: 'Sage-femme', etape: 4, semaine: 6, prochainRdv: 'Mer 16 h', signale: false, derniereNote: 'Relais psychologue (Mon soutien psy) engagé avec consentement tracé le 2 octobre.' },
 ]
 
