@@ -41,7 +41,7 @@ try:
 except ImportError:          # hors macOS / Linux : pas de sérialisation, le reste marche
     fcntl = None
 
-VERSION = '3.9'
+VERSION = '3.10'
 SEUIL_MIN = 4        # demandes humaines avant d'exiger une synthèse
 SEUIL_REFRESH = 8    # nouvelles demandes depuis la dernière synthèse (ou libération)
 MAX_RELANCES = 3     # blocages consécutifs avant de laisser finir
@@ -250,8 +250,8 @@ def analyser_transcript(chemin: str):
         envois.update(c for c in nouvelles if c)
         positions += [debut] * len(nouvelles)
         unites += [(uuid, debut)] * len(nouvelles)
-        if mere and cles:
-            herites.setdefault(mere, set()).update(cles)
+        if mere:                               # ancien format sans clé : compté par sa position
+            herites.setdefault(mere, set()).update(cles or ['repli:' + str(debut)])
             herites_uuids.setdefault(mere, []).extend([uuid] * len(nouvelles))
     return SimpleNamespace(nb=len(positions), positions=positions, unites=unites, liens=liens, active=active,
                            ancre=ancre, ids_prompt=ids_prompt, ecrits=ecrits, tete=tete, taille=fin, fourches=points,
@@ -372,7 +372,10 @@ def synthese_heritee(mere: str, herite: int, a) -> int:
     tampon, ancre = entier(etat.get('tampon')), str(etat.get('ancre_tampon') or '')
     if tampon < 0:
         return min(tampon_durable(mere), herite)
-    point, chemin = a.fourches.get(mere, ''), trouver_transcript(mere)
+    point = a.fourches.get(mere, '')
+    chemin = str(etat.get('transcript') or '')            # chemin noté par la mère (nom de fichier libre)
+    if not chemin or not os.path.isfile(chemin):
+        chemin = trouver_transcript(mere)
     if not ancre or not point or not chemin:
         return min(tampon, herite)
     am = analyser_transcript(chemin)
@@ -450,17 +453,18 @@ def mode_tamponne(session: str, transcript: str) -> int:
     if ok:                                 # sans tampon écrit, la dette reste pour le rappel suivant
         effacer_dette(session)
         for mere, herite in parents.items():   # une fourche synthétisée couvre ce qu'elle a hérité de sa mère
-            if isinstance(dette.get(mere), dict) and entier(dette[mere].get('nb'), 0) <= herite:
-                effacer_dette(mere)
+            if mere == session:
+                continue                         # (jamais sa propre mère : pas de double verrou)
+            effacer_dette_si(mere, lambda d, h=herite: entier(d.get('nb'), 0) <= h)
             f_mere = dossier_etat() / (nom_sur(mere) + '.json')
-            etat_mere = lire_json(f_mere, {})
-            etat_mere = etat_mere if isinstance(etat_mere, dict) else {}
-            if entier(etat_mere.get('tampon')) < herite:     # reprise de la mère : déjà couverte jusque-là
-                # ancré au point de fourche, pour qu'un /rewind de la mère le ramène ; souple : si ses
-                # uuids diffèrent de ceux de la fourche, l'ancre absente ne vaut pas zéro
-                etat_mere.update({'tampon': herite, 'ancre_tampon': a.fourches.get(mere, ''), 'ancre_souple': True,
-                                  't_tampon': time.time()})
-                with verrou_session(mere):
+            with verrou_session(mere):           # lu, comparé et écrit sous le verrou de la mère
+                etat_mere = lire_json(f_mere, {})
+                etat_mere = etat_mere if isinstance(etat_mere, dict) else {}
+                if entier(etat_mere.get('tampon')) < herite:     # reprise de la mère : déjà couverte jusque-là
+                    # ancré au point de fourche, pour qu'un /rewind de la mère le ramène ; souple : si ses
+                    # uuids diffèrent de ceux de la fourche, l'ancre absente ne vaut pas zéro
+                    etat_mere.update({'tampon': herite, 'ancre_tampon': a.fourches.get(mere, ''), 'ancre_souple': True,
+                                      't_tampon': time.time()})
                     ecrire_json(f_mere, etat_mere)
     print(f'Vive mémoire : synthèse enregistrée pour la session {session} ({nb} demandes)'
           + ('' if ok else ' — ATTENTION : état non inscriptible, rien n\'a été écrit') + '.')
@@ -486,9 +490,8 @@ def mode_debut(session: str, source: str) -> int:
     for s, v in dette.items():
         if not isinstance(v, dict):
             continue
-        if synthese_depuis(s, reel(v.get('t'))) >= entier(v.get('nb'), 0):
-            effacer_dette(s)                 # une synthèse faite depuis la dette la couvre (tampon ou compte rendu)
-            continue
+        if effacer_dette_si(s, lambda d, s=s: synthese_depuis(s, reel(d.get('t'))) >= entier(d.get('nb'), 0)):
+            continue                         # une synthèse faite depuis la dette la couvre (tampon ou compte rendu)
         if s == session and source == 'resume':
             dues[s] = v                      # on reprend la discussion qui doit sa synthèse
         elif s != session and (source == 'clear' or maintenant - reel(v.get('t')) > 3600):
@@ -505,10 +508,28 @@ def dossier_dettes() -> Path:
     return dossier_etat() / 'dettes'
 
 
-def noter_dette(session: str, nb: int) -> None:
+def noter_dette(session: str, nb: int) -> bool:
     # « t » date la dette : au démarrage, seule une synthèse faite après elle l'efface.
-    ecrire_json(dossier_dettes() / (nom_sur(session) + '.json'),
+    return ecrire_json(dossier_dettes() / (nom_sur(session) + '.json'),
                 {'session': session, 'nb': nb, 'date': time.strftime('%Y-%m-%d %H:%M'), 't': time.time()})
+
+
+def lire_dette(session: str):
+    v = lire_json(dossier_dettes() / (nom_sur(session) + '.json'), None)
+    if isinstance(v, dict) and v.get('session'):
+        return v
+    ancien = lire_json(dossier_etat() / 'dette.json', {})
+    return ancien.get(session) if isinstance(ancien, dict) and isinstance(ancien.get(session), dict) else None
+
+
+def effacer_dette_si(session: str, couverte) -> bool:
+    """Sous le verrou de la session, relit sa dette et ne l'efface que si « couverte(dette) » est vrai :
+    une dette plus récente notée entre-temps par un Stop n'est jamais effacée sur une lecture périmée."""
+    with verrou_session(session):
+        v = lire_dette(session)
+        if isinstance(v, dict) and couverte(v):
+            return effacer_dette(session)
+    return False
 
 
 def lire_dettes() -> dict:
@@ -571,8 +592,8 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
         elif entier(dettes[session].get('nb'), 0) > nb:
             noter_dette(session, nb)     # /rewind : la dette suit la branche active
     for mere, herite in a.parents.items():   # la synthèse de cette fourche couvre ce qu'elle a hérité
-        if mere != session and isinstance(dettes.get(mere), dict) and entier(dettes[mere].get('nb'), 0) <= min(herite, synthese):
-            effacer_dette(mere)
+        if mere != session and isinstance(dettes.get(mere), dict):
+            effacer_dette_si(mere, lambda d, borne=min(herite, synthese): entier(d.get('nb'), 0) <= borne)
     due = nb >= SEUIL_MIN and not (reference >= 0 and nb - reference < SEUIL_REFRESH)
     # Pause quand la session attend du travail né depuis la dernière demande humaine (tâche en
     # cours ou en file, réveil ponctuel planifié). Une attente plus ancienne (serveur de dev,
@@ -604,9 +625,13 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     if relances >= MAX_RELANCES:
         etat.update({'relances': 0, 'libere_a': nb, 'ancre_libere': a.ancre})
         ecrire_json(f_etat, etat)
-        noter_dette(session, nb)
-        ou = ('en cloud, le rappel ne survit pas au conteneur : ajoute « Synthèse due : session ' + session + ' » en P0 de next-actions.md'
-              if os.environ.get('CLAUDE_CODE_REMOTE') else 'elle sera rappelée au prochain démarrage sur cette machine')
+        notee = noter_dette(session, nb)
+        if os.environ.get('CLAUDE_CODE_REMOTE') or not notee:
+            ou = (('la dette n\'a pas pu être notée (' + str(dossier_dettes()) + ') ; ' if not notee else
+                   'en cloud, le rappel ne survit pas au conteneur : ')
+                  + 'ajoute « Synthèse due : session ' + session + ' » en P0 de next-actions.md')
+        else:
+            ou = 'elle sera rappelée au prochain démarrage sur cette machine'
         sortie({'systemMessage': f'Vive mémoire : synthèse non faite après {MAX_RELANCES} relances ({nb} demandes) ; {ou}.'})
         return 0
     etat['relances'] = relances + 1

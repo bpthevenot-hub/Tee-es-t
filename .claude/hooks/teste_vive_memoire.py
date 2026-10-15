@@ -537,6 +537,30 @@ verifie('30an. tampon posé par la fourche chez la mère : ramené par un /rewin
 b.poser_dette('CLOS', nb=6, t=time.time())
 rc, j, out, _ = b.appel('debut', {'session_id': 'NOUVELLE', 'source': 'clear'})
 verifie('30ap. /clear : la dette récente de la session close est rappelée', 'CLOS' in out, out[:200])
+(mem / 'sessions/2026-10-15-n.md').write_text('Session : M5\nDemandes : 4\n')
+rc, j = b.stop('F5', b.transcript('F5', [dict(ancien(x), forkedFrom={'sessionId': 'M5'}) for x in 'abcd'] + [humain('e')]))
+verifie('30aq. fourche d\'un ancien transcript (sans origine ni clé) : hérite de la synthèse de la mère', not bloque(j), j)
+autre = proj / 'nom-libre.jsonl'
+autre.write_text('\n'.join(json.dumps(x) for x in tours('', 10) + tours('m', 8, parent='a2', debut=3)) + '\n')
+(b.etat / 'M6.json').write_text(json.dumps({'transcript': str(autre)}))
+b.python('tamponne', 'M6')
+rc, j = b.stop('F6', b.transcript('F6', herite(tours('', 10), 'M6')))
+verifie('30ar. transcript de la mère au nom libre (noté dans son état) : sa synthèse après /rewind n\'est pas héritée en bloc',
+        bloque(j) and '10 demandes' in j.get('reason', ''), j)
+ok_mere = True
+for tour in range(5):
+    (b.etat / f'M7{tour}.json').unlink(missing_ok=True)
+    for nom, k in ((f'F7a{tour}', 10), (f'F7b{tour}', 5)):
+        shutil.copy(b.transcript(nom, [humain(str(i), forkedFrom={'sessionId': f'M7{tour}'}) for i in range(k)]), proj / f'{nom}.jsonl')
+    duo = [subprocess.Popen([sys.executable, '-I', str(b.hooks / 'vive_memoire.py'), 'tamponne', n], env=b.env(), stdout=subprocess.DEVNULL)
+           for n in (f'F7a{tour}', f'F7b{tour}')]
+    [x.wait(timeout=60) for x in duo]
+    ok_mere &= json.loads((b.etat / f'M7{tour}.json').read_text()).get('tampon') == 10
+verifie('30as. deux fourches tamponnent en même temps : la mère garde le plus grand tampon', ok_mere)
+etat_d = b.racine / 'etat-dettes-fichier'; etat_d.mkdir(); (etat_d / 'dettes').write_text('pas un dossier')
+msgs = [b.appel('stop', {'session_id': 'S90', 'transcript_path': t4}, {'VM_ETAT': str(etat_d)})[1] for _ in range(4)]
+verifie('30at. dette impossible à noter : le message ne promet pas de rappel', 'pas pu être notée' in msgs[-1].get('systemMessage', '')
+        and 'rappelée au prochain démarrage' not in msgs[-1].get('systemMessage', ''), msgs[-1])
 verifie('30s3. état corrompu (types inattendus) : tamponne et Stop fonctionnent', r.returncode == 0 and 'S59' in r.stdout and rc == 0, [r.returncode, r.stdout, j])
 tpl2 = b.transcript('tpl2', [humain('a'), humain('b'), humain('c')])
 b.appel('prompt', {'session_id': 'S60', 'prompt': 'Point de contrôle : relire les PR', 'transcript_path': tpl2})
