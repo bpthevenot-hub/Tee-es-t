@@ -43,7 +43,7 @@ try:
 except ImportError:          # hors macOS / Linux : pas de sérialisation, le reste marche
     fcntl = None
 
-VERSION = '3.18'
+VERSION = '3.19'
 SEUIL_MIN = 4        # demandes humaines avant d'exiger une synthèse
 SEUIL_REFRESH = 8    # nouvelles demandes depuis la dernière synthèse (ou libération)
 MAX_RELANCES = 3     # blocages consécutifs avant de laisser finir
@@ -245,7 +245,9 @@ def analyser_transcript(chemin: str):
                             cles += [str(x) for x in fusion] if isinstance(fusion, list) else []
                             if uuid:
                                 tapee = uuid
-                    elif t and not avec_origine and not t.startswith(TECHNIQUE):
+                    elif not avec_origine and ((t and not t.startswith(TECHNIQUE)) or (
+                            not t and isinstance(contenu, list)
+                            and any(isinstance(x, dict) and x.get('type') in ('image', 'document') for x in contenu))):
                         cles = []
                 if cles is not None:
                     candidats.append([uuid, cles, debut, mere, str(o.get('parentUuid') or ''), ''])
@@ -299,16 +301,22 @@ def ancre_au_temps(a, date: float) -> str:
 
 def couvertes(a, ancre: str, n: int, souple: bool = False) -> int:
     """Demandes déjà couvertes par une synthèse (ou une libération) faite à « ancre » quand la
-    discussion comptait n demandes. Ancre sur la branche active, inconnue ou chaîne rompue : n.
-    Ancre abandonnée par /rewind : seules les demandes actives qui en sont des ancêtres. Ancre
-    absente d'un transcript lisible (fichier reconstruit depuis une compaction plus récente) : 0, sauf
-    ancre « souple » (posée depuis une fourche, dont les uuids peuvent manquer à la mère) : n."""
-    if n < 0 or not ancre or a.active is None:
+    discussion comptait n demandes, jamais plus que ce que le transcript actuel en contient (un
+    transcript reconstruit depuis une compaction a pu perdre des demandes d'avant l'ancre). Ancre sur la
+    branche active : n, plafonné aux demandes écrites jusqu'à elle ; inconnue ou chaîne rompue : n,
+    plafonné au compte du transcript. Ancre abandonnée par /rewind : seules les demandes actives qui en
+    sont des ancêtres. Ancre absente d'un transcript lisible (fichier reconstruit depuis une compaction
+    plus récente) : 0, sauf ancre « souple » (posée depuis une fourche, dont les uuids peuvent manquer à
+    la mère) : n, plafonné au compte du transcript."""
+    if n < 0:
         return n
+    if not ancre or a.active is None:
+        return min(n, a.nb)
     if ancre not in a.liens:
-        return n if souple else 0
+        return min(n, a.nb) if souple else 0
     if ancre in a.active:
-        return n
+        limite = a.liens[ancre][2]
+        return min(n, sum(1 for _, debut in a.unites if debut <= limite))
     ancetres = chaine_active(a.liens, ancre)[0] or set()
     limite = a.liens[ancre][2]
     return min(n, sum(1 for u, debut in a.unites if ((u in ancetres) if u in a.liens else debut <= limite)))
@@ -676,11 +684,15 @@ def lire_dette(session: str):
 
 def effacer_dette_si(session: str, couverte) -> bool:
     """Sous le verrou de la session, relit sa dette et ne l'efface que si « couverte(dette) » est vrai :
-    une dette plus récente notée entre-temps par un Stop n'est jamais effacée sur une lecture périmée."""
+    une dette plus récente notée entre-temps par un Stop n'est jamais effacée sur une lecture périmée.
+    Rend vrai si la dette est couverte, même si son fichier n'a pas pu être effacé (le dire, pas la rappeler)."""
     with verrou_session(session):
         v = lire_dette(session)
         if isinstance(v, dict) and couverte(v):
-            return effacer_dette(session)
+            if not effacer_dette(session):
+                print(f'Vive mémoire : la dette de la session {session} est couverte mais son fichier n\'a pas pu être '
+                      f'effacé ({dossier_dettes()}).')
+            return True
     return False
 
 
@@ -850,23 +862,29 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
 
 
 def derniere_assistant(chemin: str) -> str:
-    """uuid de la dernière entrée assistant du transcript (lu par la fin) ; '' sinon."""
+    """uuid de la dernière entrée assistant du transcript, lu par la fin par blocs (une entrée peut
+    dépasser la taille d'un bloc : on recule jusqu'à la trouver entière) ; '' sinon."""
     try:
         with open(chemin, 'rb') as f:
             f.seek(0, 2)
-            f.seek(max(0, f.tell() - 262144))
-            bloc = f.read()
+            pos, reste = f.tell(), b''
+            while pos > 0:
+                lu = min(262144, pos)
+                pos -= lu
+                f.seek(pos)
+                lignes = (f.read(lu) + reste).split(b'\n')
+                reste = lignes[0] if pos > 0 else b''      # début de ligne incomplet : relu avec le bloc d'avant
+                for ligne in reversed(lignes[1:] if pos > 0 else lignes):
+                    if b'"assistant"' not in ligne:
+                        continue
+                    try:
+                        o = json.loads(ligne.decode('utf-8', 'replace'))
+                    except (ValueError, RecursionError):
+                        continue
+                    if isinstance(o, dict) and o.get('type') == 'assistant' and o.get('uuid') and not o.get('isSidechain'):
+                        return str(o['uuid'])
     except OSError:
         return ''
-    for ligne in reversed(bloc.split(b'\n')):
-        if b'"assistant"' not in ligne:
-            continue
-        try:
-            o = json.loads(ligne.decode('utf-8', 'replace'))
-        except (ValueError, RecursionError):
-            continue
-        if isinstance(o, dict) and o.get('type') == 'assistant' and o.get('uuid') and not o.get('isSidechain'):
-            return str(o['uuid'])
     return ''
 
 

@@ -313,6 +313,14 @@ ajouter(t4c, assistant('z2', 'z1'))
 rc, js2, _, _ = b.appel('stop', evtS, VERROU)
 verifie('29s. même entrée à moins de 2 s : même réponse = même événement (une copie), nouvelle réponse = autre Stop (il agit)',
         bloque(js1) and js1b == {} and bloque(js2), [bloque(js1), js1b, bloque(js2)])
+def gros_assistant(uuid, parent):
+    return {'type': 'assistant', 'uuid': uuid, 'parentUuid': parent, 'message': {'role': 'assistant', 'content': 'x' * 300_000}}
+t4g = b.transcript('t4g', [humain(x) for x in 'abcd'] + [gros_assistant('g1', None)])
+evtG = {'session_id': 'S20y', 'transcript_path': t4g, 'stop_hook_active': False}
+rc, jg1, _, _ = b.appel('stop', evtG, VERROU)
+ajouter(t4g, gros_assistant('g2', 'g1'))
+rc, jg2, _, _ = b.appel('stop', evtG, VERROU)
+verifie('29s2. réponse assistant de plus de 256 Kio : deux Stop distincts restent distincts', bloque(jg1) and bloque(jg2), [bloque(jg1), jg2])
 (b.etat / 'evenements').rename(b.racine / 'evenements-fichier'); (b.etat / 'evenements').write_text('pas un dossier')
 rc, j, _, _ = b.appel('stop', {'session_id': 'S20h', 'transcript_path': t4}, VERROU)
 verifie('29m. verrou impossible (chemin occupé par un fichier) : la copie agit quand même', bloque(j), j)
@@ -942,6 +950,26 @@ sonde3 = ("import sys; sys.argv = ['x']; sys.path.insert(0, %r); import vive_mem
           "print(m.trouver_transcript('S130'))\n") % (str(b.hooks), str(egare / 'S130.jsonl'), str(principal))
 r130 = subprocess.run([sys.executable, '-I', '-c', sonde3], capture_output=True, text=True, timeout=30, env=b.env())
 verifie('30cd. deux transcripts du même nom (un agent lancé ailleurs) : le principal est choisi', r130.stdout.strip() == str(principal), [r130.stdout, r130.stderr[-200:]])
+# E1 : couverture plafonnée à ce que le transcript reconstruit contient encore
+t131 = ecrire_t('S131', tours('', 10)); b.python('tamponne', 'S131')
+Path(t131).write_text('\n'.join(json.dumps(x) for x in [frontiere('a8')] + tours('', 2, parent='B', debut=9)) + '\n')
+ajouter(t131, *tours('', 8, parent='a10', debut=11))
+rc, j131 = b.stop('S131', t131)
+verifie('30ce. transcript reconstruit qui garde l\'ancre du tampon : la couverture ne dépasse pas ce qu\'il contient (relance après 8 nouvelles)',
+        bloque(j131) and '10 demandes' in j131.get('reason', ''), j131)
+# E4 : image seule dans un ancien transcript
+img = lambda: {'type': 'user', 'message': {'role': 'user', 'content': [{'type': 'image', 'source': {'type': 'base64', 'media_type': 'image/png', 'data': 'AA=='}}]}}
+rc, j132 = b.stop('S132', b.transcript('t132', [img() for _ in range(4)]))
+verifie('30cf. ancien transcript (sans origine) : une demande faite d\'une image seule compte', bloque(j132) and '4 demandes' in j132.get('reason', ''), j132)
+# E5 : dette couverte mais impossible à effacer : pas de rappel
+e133 = b.racine / 'etat-133'; (e133 / 'dettes').mkdir(parents=True)
+(e133 / 'dettes/S133.json').write_text(json.dumps({'session': 'S133', 'nb': 6, 'ancre': '', 'date': 'x', 't': 1000.0}))
+(e133 / 'S133.json').write_text(json.dumps({'tampon': 8, 't_tampon': 2000.0}))
+sonde4 = ("import sys; sys.argv = ['x']; sys.path.insert(0, %r); import vive_memoire as m\n"
+          "m.effacer_dette = lambda session: False\n"
+          "m.mode_debut('AUTRE-133', 'startup')\n") % str(b.hooks)
+r133 = subprocess.run([sys.executable, '-I', '-c', sonde4], capture_output=True, text=True, timeout=30, env=b.env({'VM_ETAT': str(e133)}))
+verifie('30cg. dette couverte mais impossible à effacer : pas de rappel « synthèse due »', 'synthèse due' not in r133.stdout and not r133.stderr.strip(), [r133.stdout[:200], r133.stderr[-200:]])
 verifie('30s3. état corrompu (types inattendus) : tamponne et Stop fonctionnent', r.returncode == 0 and 'S59' in r.stdout and rc == 0, [r.returncode, r.stdout, j])
 tpl2 = b.transcript('tpl2', [humain('a'), humain('b'), humain('c')])
 b.appel('prompt', {'session_id': 'S60', 'prompt': 'Point de contrôle : relire les PR', 'transcript_path': tpl2})
@@ -1109,6 +1137,13 @@ for tour in range(3):
     [x.wait(timeout=60) for x in lots]
     perdus += len(json.loads((etat17 / 'dette.json').read_text()))
 verifie('30cc. ancien fichier de dettes : 16 effacements simultanés, aucun ne revient', perdus == 0, perdus)
+h18 = b.racine / 'mac18'; h18.mkdir(); conf18 = b.racine / 'conf:avec:deux-points'
+installer(h18, sup={'CLAUDE_CONFIG_DIR': str(conf18)})
+(conf18 / 'skills/vive-memoire/notes-perso.txt').write_text('à garder')
+(conf18 / 'hooks/vive-memoire/perso.py').write_text('# à garder\n')
+r = installer(h18, sup={'CLAUDE_CONFIG_DIR': str(conf18)})
+verifie('52. chemin de configuration avec « : » : mise à jour, ajouts manuels gardés',
+        r.returncode == 0 and (conf18 / 'skills/vive-memoire/notes-perso.txt').exists() and (conf18 / 'hooks/vive-memoire/perso.py').exists(), [r.returncode, r.stdout[-200:]])
 shutil.rmtree(b.racine, ignore_errors=True)
 print(f'\n{total} vérifications, {len(echecs)} échec(s)')
 sys.exit(1 if echecs else 0)

@@ -46,9 +46,10 @@ installer_fichiers() {
   # Fichiers ajoutés à la main dans l'installation actuelle : recopiés dans les dossiers préparés AVANT
   # tout remplacement (les nôtres priment) ; une copie impossible (disque plein, fichier illisible)
   # annule tout et laisse l'installation actuelle intacte.
-  for paire in "$cible_hooks:$prep/hooks" "$cible_skill:$prep/skill"; do
-    if [ -d "${paire%%:*}" ]; then
-      fusionner "${paire%%:*}" "${paire#*:}" \
+  for nom in hooks skill; do
+    if [ "$nom" = hooks ]; then installe="$cible_hooks"; else installe="$cible_skill"; fi   # chemins jamais sérialisés (« : » possible)
+    if [ -d "$installe" ]; then
+      fusionner "$installe" "$prep/$nom" \
         || { rm -rf "$prep"; echo "Fichiers ajoutés à la main impossibles à recopier ; l'installation précédente est restée en place."; exit 1; }
     fi
   done
