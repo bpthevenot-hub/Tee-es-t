@@ -2,8 +2,10 @@
 
 Usage : python3 teste_vive_memoire.py      (code 0 si tout passe)
 """
+import hashlib
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -232,6 +234,19 @@ sorties = [x.stdout.read() for x in ps]
 verifie('29i. deux copies en parallèle sur le même événement, transcript écrit entre elles : une seule agit',
         sum('"block"' in x for x in sorties) == 1, sorties)
 verifie('29j. la copie utilisateur pose encore la marque lue par une copie de dépôt 3.5', (b.etat / 'actifs/S20').exists())
+evtA = {'session_id': 'S20j', 'transcript_path': t4, 'stop_hook_active': False, 'background_tasks': [{'id': 'w9', 'status': 'running'}]}
+rc, ja, _, _ = b.appel('stop', evtA, VERROU)
+rc, jb, _, _ = b.appel('stop', dict(evtA, background_tasks=[]), VERROU)
+verifie('29n. deux Stop distincts à moins de 2 s (tâche finie entre-temps) : le second n\'est pas avalé', not bloque(ja) and bloque(jb), [ja, jb])
+(inst / 'vive_memoire.py').write_text("VERSION = '3.6'\n")
+cle36 = json.dumps(['stop', 'S20k', t4, os.path.getsize(t4), None, None, False], ensure_ascii=True, default=str)
+(b.etat / 'evenements' / hashlib.sha1(cle36.encode('ascii')).hexdigest()[:24]).touch()
+rc, j, _, _ = b.appel('stop', {'session_id': 'S20k', 'transcript_path': t4, 'stop_hook_active': False}, VERROU)
+cle36b = json.dumps(['stop', 'S20l', t4, os.path.getsize(t4), None, None, False], ensure_ascii=True, default=str)
+rc2, j2, _, _ = b.appel('stop', {'session_id': 'S20l', 'transcript_path': t4, 'stop_hook_active': False}, VERROU)
+verifie('29o. copie utilisateur 3.6 : son verrou fait taire le dépôt, et le dépôt pose le sien quand il agit',
+        j == {} and bloque(j2) and (b.etat / 'evenements' / hashlib.sha1(cle36b.encode('ascii')).hexdigest()[:24]).exists(), [j, j2])
+(inst / 'vive_memoire.py').write_text((ICI / 'vive_memoire.py').read_text(encoding='utf-8'), encoding='utf-8')
 (b.etat / 'evenements').rename(b.racine / 'evenements-fichier'); (b.etat / 'evenements').write_text('pas un dossier')
 rc, j, _, _ = b.appel('stop', {'session_id': 'S20h', 'transcript_path': t4}, VERROU)
 verifie('29m. verrou impossible (chemin occupé par un fichier) : la copie agit quand même', bloque(j), j)
@@ -492,6 +507,20 @@ try:
 except ValueError:
     valide = False
 verifie('30aj. 25 écritures simultanées de l\'état : jamais de JSON mélangé', valide and not list(b.etat.glob('S72.json.*')))
+tpz = b.transcript('tpz', tours('', 12))
+tache = [{'id': 'w7', 'status': 'running'}]
+p1 = bloque(b.stop('S80', tpz, background_tasks=tache)[1])
+ajouter(tpz, humain('c bis', uuid='h3b', parentUuid='a2'), assistant('a3b', 'h3b'))
+p2 = bloque(b.stop('S80', tpz, background_tasks=tache)[1])
+ajouter(tpz, *tours('z', 7, parent='a3b', debut=4))
+rc, j = b.stop('S80', tpz, background_tasks=tache)
+verifie('30al. pause par une tâche longue, puis /rewind et 8 demandes : la pause cesse', not p1 and not p2 and bloque(j), [p1, p2, j])
+lots = [subprocess.Popen(['bash', str(b.enveloppe), 'prompt'], stdin=subprocess.PIPE, text=True, env=b.env()) for _ in range(15)]
+for k, x in enumerate(lots):
+    x.stdin.write(json.dumps({'session_id': 'S81', 'prompt': f'demande {k}', 'transcript_path': t4})); x.stdin.close()
+[x.wait(timeout=60) for x in lots]
+notees = json.loads((b.etat / 'S81.json').read_text()).get('prompts', [])
+verifie('30ak. 15 demandes envoyées en même temps : aucune perdue (état sérialisé)', len(notees) == 15, len(notees))
 verifie('30s3. état corrompu (types inattendus) : tamponne et Stop fonctionnent', r.returncode == 0 and 'S59' in r.stdout and rc == 0, [r.returncode, r.stdout, j])
 tpl2 = b.transcript('tpl2', [humain('a'), humain('b'), humain('c')])
 b.appel('prompt', {'session_id': 'S60', 'prompt': 'Point de contrôle : relire les PR', 'transcript_path': tpl2})
@@ -600,6 +629,14 @@ r = installer(h10)
 txt = (h10 / '.claude/settings.json').read_text(encoding='utf-8')
 verifie('45. demi-paire dans les réglages : seule elle est échappée, notre chemin reste en clair',
         r.returncode == 0 and str(h10 / '.claude/hooks/vive-memoire/vive-memoire-stop.sh') in txt and json.loads(txt).get('note') == '\ud800', [r.stderr[-200:], txt[:200]])
+conf = b.racine / 'conf-$HOME-"x" y'
+r = installer(b.racine / 'mac11', sup={'CLAUDE_CONFIG_DIR': str(conf)})
+cmd_stop = json.loads((conf / 'settings.json').read_text())['hooks']['Stop'][-1]['hooks'][0]['command']
+verifie('46. chemin de config avec $, " et espace : commande citée, script trouvé', r.returncode == 0 and Path(shlex.split(cmd_stop)[1]).is_file(), [r.stderr[-200:], cmd_stop])
+(b.racine / 'travail').mkdir()
+r = installer(b.racine / 'mac12', cwd=str(b.racine / 'travail'), sup={'CLAUDE_CONFIG_DIR': 'conf-relative'})
+cmd_rel = json.loads((b.racine / 'travail/conf-relative/settings.json').read_text())['hooks']['Stop'][-1]['hooks'][0]['command']
+verifie('47. CLAUDE_CONFIG_DIR relatif : commande enregistrée en chemin absolu', r.returncode == 0 and Path(shlex.split(cmd_rel)[1]).is_absolute(), cmd_rel)
 shutil.rmtree(b.racine, ignore_errors=True)
 print(f'\n{total} vérifications, {len(echecs)} échec(s)')
 sys.exit(1 if echecs else 0)

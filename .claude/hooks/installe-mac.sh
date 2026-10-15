@@ -25,6 +25,8 @@ if [ -z "$skill_src" ] && [ "${1:-}" != "--retirer" ]; then
   echo "Skill vive-memoire introuvable à côté de ce script ; rien n'a été installé."; exit 1
 fi
 config="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+mkdir -p "$config"
+config=$(CDPATH= cd -- "$config" && pwd)      # chemin absolu : les hooks tournent depuis n'importe quel dossier
 cible_hooks="$config/hooks/vive-memoire"
 cible_skill="$config/skills/vive-memoire"
 reglages="$config/settings.json"
@@ -47,13 +49,13 @@ installer_fichiers() {
 }
 enregistrer() {
 python3 - "$reglages" "$cible_hooks" "${1:-}" <<'PYEOF'
-import json, os, re, stat, sys, tempfile
+import json, os, re, shlex, stat, sys, tempfile
 from pathlib import Path
 reglages, cible, mode = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 EVTS = ('Stop', 'UserPromptSubmit', 'SessionStart')
 # Nos commandes : un de nos deux scripts, quel que soit son dossier, suivi au plus d'un de nos modes.
 # Une commande voisine qui contient seulement « vive-memoire » (ex. ~/bin/vive-memoire-audit) reste.
-NOTRE = re.compile(r'^\s*(?:bash\s+)?(?:"[^"]*/|\S*/)?vive-memoire-(?:stop|prompt)\.sh"?(?:\s+(?:stop|prompt|debut))?\s*$')
+NOTRE = re.compile(r"""^\s*(?:bash\s+)?(?:"[^"]*/|'[^']*/|\S*/)?vive-memoire-(?:stop|prompt)\.sh["']?(?:\s+(?:stop|prompt|debut))?\s*$""")
 texte = reglages.read_text(encoding='utf-8') if reglages.exists() else ''
 try:
     s = json.loads(texte) if texte.strip() else {}
@@ -77,7 +79,7 @@ for evt in EVTS:
         groupes.append(g)
     h[evt] = groupes
 if mode != '--retirer':
-    cmd = 'bash "' + cible + '/vive-memoire-stop.sh" '
+    cmd = 'bash ' + shlex.quote(cible + '/vive-memoire-stop.sh') + ' '     # $, " ou espace dans le chemin : sans danger
     h['Stop'].append({'matcher': '', 'hooks': [{'type': 'command', 'command': cmd + 'stop', 'timeout': 30}]})
     h['UserPromptSubmit'].append({'matcher': '', 'hooks': [{'type': 'command', 'command': cmd + 'prompt', 'timeout': 10}]})
     h['SessionStart'].append({'matcher': 'startup|resume|clear|fork', 'hooks': [{'type': 'command', 'command': cmd + 'debut', 'timeout': 10}]})
@@ -102,7 +104,6 @@ except BaseException:
 print(('Retiré de ' if mode == '--retirer' else 'Installé dans ') + str(reglages))
 PYEOF
 }
-mkdir -p "$config"
 enregistrer verifier
 [ -f "$reglages" ] && cp "$reglages" "$reglages.avant-vive-memoire.$(date +%Y%m%d%H%M%S).$$"
 if [ "${1:-}" = "--retirer" ]; then

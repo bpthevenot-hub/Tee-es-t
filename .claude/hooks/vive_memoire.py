@@ -31,10 +31,16 @@ import re
 import sys
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 
-VERSION = '3.7'
+try:
+    import fcntl
+except ImportError:          # hors macOS / Linux : pas de sérialisation, le reste marche
+    fcntl = None
+
+VERSION = '3.8'
 SEUIL_MIN = 4        # demandes humaines avant d'exiger une synthèse
 SEUIL_REFRESH = 8    # nouvelles demandes depuis la dernière synthèse (ou libération)
 MAX_RELANCES = 3     # blocages consécutifs avant de laisser finir
@@ -545,7 +551,7 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
         if isinstance(x, dict):
             attente.add('c:' + str(x.get('id') or x.get('prompt') or len(attente)))
     pause = etat.get('pause') if isinstance(etat.get('pause'), dict) else {}
-    vues = {k: entier(n, nb) for k, n in pause.items() if k in attente}
+    vues = {k: min(entier(n, nb), nb) for k, n in pause.items() if k in attente}   # /rewind : jamais au-delà du compte actif
     for k in attente:
         vues.setdefault(k, nb)
     etat['pause'] = vues
@@ -584,16 +590,14 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     return 0
 
 
-def premiere_copie(mode: str, entree: dict) -> bool:
+def premiere_copie(mode: str, entree: dict, compat_36: bool = False) -> bool:
     """Plusieurs copies (utilisateur, dépôt) reçoivent le même événement en parallèle, avec la même
     entrée : seule la première à en poser le verrou agit. La clé ne porte que l'entrée (pas la taille
     du transcript, qui peut changer entre deux lectures) ; un verrou de plus de 2 s est celui d'un
     autre événement : il est remplacé. VM_VERROU=non le coupe (banc)."""
     if os.environ.get('VM_VERROU') == 'non':
         return True
-    cle = json.dumps([mode, entree.get('session_id'), entree.get('transcript_path'), entree.get('prompt'),
-                      entree.get('prompt_id'), entree.get('source'), entree.get('stop_hook_active')],
-                     ensure_ascii=True, default=str)
+    cle = json.dumps([mode, entree], sort_keys=True, ensure_ascii=True, default=str)   # toute l'entrée : tâches, crons…
     dossier = dossier_etat() / 'evenements'
     try:
         dossier.mkdir(parents=True, exist_ok=True)
@@ -615,7 +619,7 @@ def premiere_copie(mode: str, entree: dict) -> bool:
                 pass
         except OSError:
             return True
-    if not pris:
+    if not pris or (compat_36 and not verrou_36(mode, entree, dossier)):
         return False
     try:
         limite = time.time() - 60
@@ -625,6 +629,47 @@ def premiere_copie(mode: str, entree: dict) -> bool:
     except OSError:
         pass
     return True
+
+
+def verrou_36(mode: str, entree: dict, dossier: Path) -> bool:
+    """Compatibilité avec une copie 3.6, qui prend son verrou sous une autre clé (avec la taille du
+    transcript) : le prendre aussi, pour qu'une seule des deux agisse sur l'événement."""
+    chemin = str(entree.get('transcript_path') or '')
+    try:
+        taille = os.path.getsize(chemin) if chemin else -1
+    except OSError:
+        taille = -1
+    cle = json.dumps([mode, entree.get('session_id'), chemin, taille, entree.get('prompt'), entree.get('source'),
+                      entree.get('stop_hook_active')], ensure_ascii=True, default=str)
+    try:
+        os.close(os.open(str(dossier / hashlib.sha1(cle.encode('ascii')).hexdigest()[:24]), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        return True
+    except FileExistsError:
+        return False
+    except OSError:
+        return True
+
+
+@contextmanager
+def verrou_session(session: str):
+    """Sérialise lecture-modification-écriture de l'état d'une session : un UserPromptSubmit pendant
+    un Stop (ou un tampon) ne perd plus la mise à jour de l'autre. Sans fcntl : sans effet."""
+    fd = None
+    if fcntl is not None:
+        try:
+            dossier_etat().mkdir(parents=True, exist_ok=True)
+            fd = os.open(str(dossier_etat() / (nom_sur(session) + '.verrou')), os.O_CREAT | os.O_RDWR, 0o600)
+            fcntl.flock(fd, fcntl.LOCK_EX)
+        except OSError:
+            pass
+    try:
+        yield
+    finally:
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
 
 def version_de(fichier: Path) -> tuple:
@@ -652,7 +697,8 @@ def main() -> int:
         if not session:
             print('Vive mémoire : identifiant de session inconnu (argument ou CLAUDE_CODE_SESSION_ID).')
             return 1
-        return mode_tamponne(session, '')
+        with verrou_session(session):
+            return mode_tamponne(session, '')
     brut = sys.stdin.read()
     entree = json.loads(brut) if brut.strip() else {}
     if not isinstance(entree, dict):
@@ -681,17 +727,21 @@ def main() -> int:
             signaler_version(installee)
         if v == (0,) or ((0,) < v < (3, 6) and marque.exists()):
             return 0                      # ≤ 3.4 : elle agit seule ; 3.5 : elle a tourné dans cette session
-    if not premiere_copie(mode, entree):
+    # Une copie 3.6 (installée, ou dans un vieux checkout à côté de la copie utilisateur) a son propre
+    # verrou : le prendre aussi dans ces deux cas.
+    compat_36 = copie == 'utilisateur' or (copie == 'doublon' and v == (3, 6))
+    if not premiere_copie(mode, entree, compat_36):
         return 0
     if mode == 'debut':
         return mode_debut(session, str(entree.get('source') or ''))
     f_etat = dossier_etat() / (nom_sur(session) + '.json')
-    etat = lire_json(f_etat, {})
-    etat = etat if isinstance(etat, dict) else {}
-    if mode == 'prompt':
-        return mode_prompt(entree, session, etat, f_etat)
-    if mode == 'stop':
-        return mode_stop(entree, session, etat, f_etat)
+    with verrou_session(session):
+        etat = lire_json(f_etat, {})
+        etat = etat if isinstance(etat, dict) else {}
+        if mode == 'prompt':
+            return mode_prompt(entree, session, etat, f_etat)
+        if mode == 'stop':
+            return mode_stop(entree, session, etat, f_etat)
     return 0
 
 
