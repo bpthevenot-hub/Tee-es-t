@@ -245,10 +245,33 @@ rc, j, _, _ = b.appel('stop', {'session_id': 'S20k', 'transcript_path': t4, 'sto
 cle36b = json.dumps(['stop', 'S20l', t4, os.path.getsize(t4), None, None, False], ensure_ascii=True, default=str)
 rc2, j2, _, _ = b.appel('stop', {'session_id': 'S20l', 'transcript_path': t4, 'stop_hook_active': False}, VERROU)
 verifie('29o. copie utilisateur 3.6 enregistrée : le dépôt se tait (comme ≤ 3.4 ; la 3.6 agit seule)', j == {} and j2 == {}, [j, j2])
+def sous_claude(mode, entree, sources):
+    """Lance l'enveloppe du dépôt sous un processus parent dont la ligne de commande porte --setting-sources."""
+    code = 'import subprocess, sys; sys.exit(subprocess.run(sys.argv[1:4]).returncode)'
+    r = subprocess.run([sys.executable, '-c', code, 'bash', str(b.enveloppe), mode, '--setting-sources', sources],
+                       input=json.dumps(entree), capture_output=True, text=True, timeout=30, env=b.env(VERROU))
+    brut = r.stdout.strip()
+    return (json.loads(brut.splitlines()[-1]) if brut.startswith('{') else {}), r.stdout
+jt, _ = sous_claude('stop', {'session_id': 'S20t', 'transcript_path': t4, 'stop_hook_active': False}, 'project')
+jt2, _ = sous_claude('stop', {'session_id': 'S20u', 'transcript_path': t4, 'stop_hook_active': False}, 'user,project')
+verifie('29t. copie utilisateur 3.6 enregistrée, session --setting-sources project : la copie du dépôt agit (et se tait avec « user »)',
+        bloque(jt) and jt2 == {}, [jt, jt2])
 (inst / 'vive_memoire.py').write_text("VERSION = '3.5'\n")
 b.poser_dette('VIEILLE35', nb=5, t=0)
 rc, j35, out35, _ = b.appel('debut', {'session_id': 'S20r', 'source': 'startup'}, VERROU)
 verifie('29r. copie utilisateur 3.5 : au démarrage, elle seule rappelle les dettes (pas de rappel en double)', 'VIEILLE35' not in out35, out35[:200])
+sonde = ("import builtins, os, sys; sys.argv = ['x']; sys.path.insert(0, sys.argv[0] if False else %r); import vive_memoire as m\n"
+         "vrai = builtins.open\n"
+         "def faux(f, *a, **k):\n"
+         "    if str(f).startswith('/proc/'): raise OSError('pas de /proc')\n"
+         "    return vrai(f, *a, **k)\n"
+         "builtins.open = faux\n"
+         "lu = m.ligne_de_commande(os.getpid())\n"
+         "print('PS-OK' if lu and lu[1] == os.getppid() and any('sonde-ps' in x for x in lu[0]) else 'PS-KO', m.reglages_utilisateur_charges())\n") % str(b.hooks)
+r_ps = subprocess.run([sys.executable, '-I', '-c', sonde, 'sonde-ps'], capture_output=True, text=True, timeout=30, env=b.env())
+verifie('29t3. sans /proc (macOS) : la ligne de commande est lue par « ps », sans erreur', 'PS-OK True' in r_ps.stdout, [r_ps.stdout, r_ps.stderr[-300:]])
+_, out35p = sous_claude('debut', {'session_id': 'S20v', 'source': 'startup'}, 'project,local')
+verifie('29t2. copie utilisateur 3.5, session sans réglages utilisateur : le dépôt rappelle les dettes au démarrage', 'VIEILLE35' in out35p, out35p[:200])
 b.python('tamponne', 'VIEILLE35') if False else (b.etat / 'dettes' / 'VIEILLE35.json').unlink()
 (inst / 'vive_memoire.py').write_text("VERSION = '3.7'\n")
 cle37 = json.dumps(['stop', 'S20p', t4, None, None, None, False], ensure_ascii=True, default=str)
@@ -686,6 +709,119 @@ verifie('30bi. compte rendu réécrit après /rewind, même en-tête : reconnu p
 tq3 = b.transcript('tq3', tours('', 3) + [dict(file_humaine('en file, fin de branche quittée', 'QA3'), parentUuid='a3')]
                   + tours('bis', 1, parent='a2', debut=3))
 verifie('30bf2. commande en file sans uuid, dernière de la branche quittée (parent quitté) : exclue', not bloque(b.stop('S104', tq3)[1]))
+def resultat(uuid, parent):
+    return {'type': 'user', 'uuid': uuid, 'parentUuid': parent,
+            'message': {'role': 'user', 'content': [{'type': 'tool_result', 'tool_use_id': 'x', 'content': 'ok'}]}}
+tpar = b.transcript('tpar', [humain('a', uuid='h1', parentUuid=None), assistant('a1', 'h1'), humain('b', uuid='h2', parentUuid='a1'),
+                             assistant('t1', 'h2'), assistant('t2', 't1'), file_humaine('en file pendant les outils', 'QP1'),
+                             resultat('r1', 't1'), resultat('r2', 't2'), assistant('a2', 'r2'),
+                             humain('c', uuid='h3', parentUuid='a2'), assistant('a3', 'h3')])
+torph = b.transcript('torph', tours('', 3)[:5] + [assistant('t3', 'h3'), resultat('r3', 't3'), file_humaine('en file avant le redémarrage', 'QO1'),
+                              assistant('x1', 'r3'), {'type': 'user', 'isMeta': True, 'uuid': 'c1', 'parentUuid': 'r3',
+                              'message': {'role': 'user', 'content': 'Continue from where you left off.'}}, assistant('a3', 'c1')])
+rc, jp = b.stop('S107', tpar)
+rc, jo = b.stop('S108', torph)
+verifie('30bf3. sans /rewind, commande en file sans uuid suivie d\'une feuille latérale (outils parallèles, réponse orpheline) : comptée',
+        bloque(jp) and '4 demandes' in jp.get('reason', '') and bloque(jo) and '4 demandes' in jo.get('reason', ''), [jp, jo])
+def ecrire_t(nom, entrees):
+    (proj / (nom + '.jsonl')).write_text('\n'.join(json.dumps(x) for x in entrees) + '\n')
+    return str(proj / (nom + '.jsonl'))
+etat_de = lambda s: json.loads((b.etat / (s + '.json')).read_text()) if (b.etat / (s + '.json')).exists() else {}
+# fourche dont le point a été quitté par la mère : ne remplace pas une synthèse de la mère qui couvre plus
+tmb = ecrire_t('MB', tours('', 10)); ecrire_t('FB', herite(tours('', 10), 'MB'))
+ajouter(tmb, *tours('m', 10, parent='a2', debut=3)); b.python('tamponne', 'MB')
+ajouter(tmb, *tours('n', 2, parent='ma6', debut=7)); b.stop('MB', tmb)
+b.python('tamponne', 'FB')
+ajouter(tmb, *tours('n', 2, parent='na8', debut=9))
+rc, jb1 = b.stop('MB', tmb)
+tme = ecrire_t('ME', tours('', 10)); tfe = ecrire_t('FE', herite(tours('', 10), 'ME'))
+b.python('tamponne', 'FE'); ajouter(tme, *tours('m', 4, parent='a2', debut=3)); b.python('tamponne', 'ME')
+ajouter(tfe, *tours('f', 1, parent='a10', debut=11)); b.stop('FE', tfe)
+ajouter(tme, *tours('m', 4, parent='ma6', debut=7))
+rc, jb2 = b.stop('ME', tme)
+verifie('30bk. fourche au point quitté par la mère : la synthèse plus large de la mère n\'est pas écrasée',
+        not bloque(jb1) and not bloque(jb2), [jb1, jb2, etat_de('MB').get('tampon'), etat_de('ME').get('tampon')])
+# mère au transcript reconstruit : la fourche n'y pose pas d'ancre absente (ni de date de synthèse)
+tma = ecrire_t('MA', tours('', 12)); ecrire_t('FA', herite(tours('', 10), 'MA'))
+b.python('tamponne', 'MA')
+Path(tma).write_text('\n'.join(json.dumps(x) for x in [frontiere('a16')] + tours('r', 9, parent='B')) + '\n')
+b.python('tamponne', 'FA')
+rc, ja1 = b.stop('MA', tma)
+tmd = ecrire_t('MD', tours('', 12)); ecrire_t('FD', herite(tours('', 10), 'MD'))
+b.python('tamponne', 'MD'); ajouter(tmd, *tours('', 8, parent='a12', debut=13))
+[b.stop('MD', tmd) for _ in range(4)]
+Path(tmd).write_text('\n'.join(json.dumps(x) for x in [frontiere('a20')] + tours('r', 2, parent='B')) + '\n')
+b.python('tamponne', 'FD')
+b.stop('MD', tmd)
+verifie('30bl. mère au transcript reconstruit : la synthèse de la fourche ne masque ni ses nouvelles demandes ni sa dette',
+        bloque(ja1) and '9 demandes' in ja1.get('reason', '') and 'MD' in b.dette(), [ja1, list(b.dette())])
+# dette de la mère sur une nouvelle branche : la fourche ne la solde pas au démarrage
+tmg = ecrire_t('MG', tours('', 10)); ecrire_t('FG', herite(tours('', 10), 'MG'))
+ajouter(tmg, *tours('p', 8, parent='a2', debut=3)); b.stop('MG', tmg)
+b.python('tamponne', 'FG')
+d_mg = json.loads((b.etat / 'dettes/MG.json').read_text()); d_mg['t'] -= 7200
+(b.etat / 'dettes/MG.json').write_text(json.dumps(d_mg))
+rc, j, out_mg, _ = b.appel('debut', {'session_id': 'AUTRE-MG', 'source': 'startup'})
+verifie('30bm. dette de la mère née sur une autre branche que la fourche : rappelée au démarrage, pas soldée',
+        'MG' in out_mg and 'MG' in b.dette(), [out_mg[:160], etat_de('MG').get('tampon')])
+# état de la mère créé par la fourche : le compte rendu de la mère reste reconnu
+tmc = ecrire_t('MC', tours('', 12)); ecrire_t('FC', herite(tours('', 4), 'MC'))
+(mem / 'sessions/2026-10-15-MC.md').write_text('Session : MC\nDemandes : 12\nAncre : a12\n')
+b.python('tamponne', 'FC')
+rc, jc = b.stop('MC', tmc)
+verifie('30bn. état de la mère créé par la synthèse d\'une fourche : son propre compte rendu est encore adopté', not bloque(jc), [jc, etat_de('MC')])
+# dettes : preuves plus strictes
+t110 = ecrire_t('S110', tours('', 4)); b.python('tamponne', 'S110')
+ajouter(t110, *tours('', 6, parent='a4', debut=5), frontiere('a10'), *tours('', 2, parent='B', debut=11))
+rc, j110 = b.stop('S110', t110)
+Path(t110).write_text('\n'.join(json.dumps(x) for x in [frontiere('a10')] + tours('', 2, parent='B', debut=11)) + '\n')
+b.stop('S110', t110)
+verifie('30bo. transcript reconstruit depuis une compaction antérieure à la dette (ancre gardée) : la dette reste',
+        bloque(j110) and 'S110' in b.dette(), [j110.get('reason', '')[:60], list(b.dette())])
+t111 = ecrire_t('S111', tours('', 12)); ecrire_t('F111', herite(tours('', 4), 'S111'))
+b.stop('S111', t111)
+b.python('tamponne', 'F111')
+Path(t111).write_text('\n'.join(json.dumps(x) for x in [frontiere('a12')] + tours('r', 2, parent='B')) + '\n')
+b.stop('S111', t111)
+verifie('30bp. synthèse d\'une fourche (jusqu\'à son point) après la dette, puis reconstruction : la dette reste', 'S111' in b.dette(), list(b.dette()))
+t112 = ecrire_t('S112', tours('', 4)); b.python('tamponne', 'S112')
+ajouter(t112, *tours('', 8, parent='a4', debut=5))
+(b.etat / 'dettes').mkdir(parents=True, exist_ok=True)
+(b.etat / 'dettes/S112.json').write_text(json.dumps({'session': 'S112', 'nb': 12, 'date': 'x', 't': time.time()}))
+ajouter(t112, humain('e bis', uuid='h5b', parentUuid='a4'), assistant('a5b', 'h5b'))
+b.stop('S112', t112)
+verifie('30bq. dette d\'avant 3.12 (sans ancre), /rewind sous le seuil : effacée comme en 3.13', 'S112' not in b.dette(), list(b.dette()))
+# comptes rendus : empreinte de la seule section de la session, toutes les signatures présentes vues
+t113 = b.transcript('t113', tours('', 10))
+cr113 = mem / 'sessions/2026-10-15-journee.md'; cr113.write_text('Session : S113\nDemandes : 10\n\nSynthèse de S113.\n')
+r0 = bloque(b.stop('S113', t113)[1])
+ajouter(t113, *tours('bis', 8, parent='a2', debut=3))
+rc, j1 = b.stop('S113', t113)
+with open(cr113, 'a', encoding='utf-8') as f:
+    f.write('\n---\n\n## Suite (autre discussion)\n\nSession : T113\nDemandes : 5\n\nAutre session, même fichier.\n')
+t_n = time.time() + 30; os.utime(cr113, (t_n, t_n))
+rc, j2 = b.stop('S113', t113)
+verifie('30br. bloc d\'une autre session ajouté au même fichier : le compte rendu d\'avant le /rewind n\'est pas réadopté',
+        not r0 and bloque(j1) and bloque(j2) and 'S113' in b.dette(), [r0, j1.get('reason', '')[:40], j2])
+t114 = b.transcript('t114', tours('', 10))
+cr114 = mem / 'sessions/2026-10-15-S114.md'; cr114.write_text('Session : S114\nDemandes : 10\n')
+b.stop('S114', t114)
+ajouter(t114, *tours('bis', 8, parent='a2', debut=3))
+[b.stop('S114', t114) for _ in range(4)]
+t_n = time.time() + 30; os.utime(cr114, (t_n, t_n))
+rc, j, out114, _ = b.appel('debut', {'session_id': 'S114', 'source': 'resume'})
+verifie('30bs. démarrage : un compte rendu déjà vu, seulement touché par un checkout, ne solde pas la dette',
+        'S114' in out114 and 'S114' in b.dette(), [out114[:160], list(b.dette())])
+t115 = b.transcript('t115', tours('', 10))
+cra = mem / 'sessions/2026-10-15-S115.md'; crb = mem / 'sessions/2026-10-15-S115-annexe.md'
+cra.write_text('Session : S115\nDemandes : 10\n\nCorps principal.\n'); crb.write_text('Session : S115\nDemandes : 10\n\nAnnexe.\n')
+t0 = time.time(); os.utime(cra, (t0 - 1, t0 - 1)); os.utime(crb, (t0, t0))
+r0 = bloque(b.stop('S115', t115)[1])
+ajouter(t115, *tours('bis', 8, parent='a2', debut=3))
+rc, j1 = b.stop('S115', t115)
+os.utime(cra, (t0 + 30, t0 + 30))
+rc, j2 = b.stop('S115', t115)
+verifie('30bt. deux comptes rendus de la même session : toucher l\'autre fichier ne le réadopte pas', not r0 and bloque(j1) and bloque(j2), [r0, j1.get('reason', '')[:40], j2])
 t105 = b.transcript('t105', tours('', 10))
 cr105 = mem / 'sessions/2026-10-15-S105.md'; cr105.write_text('Session : S105\nDemandes : 10\n')
 (b.etat / 'S105.json').write_text(json.dumps({'tampon': 10, 'ancre_tampon': 'a10', 'rapports_vus': [[10, '']], 'transcript': t105}))
@@ -696,6 +832,14 @@ cr105.write_text('Session : S105\nDemandes : 10\n\nRéécrit après le /rewind.\
 rc, j2 = b.stop('S105', t105)
 verifie('30bj. état de 3.13 (signature sans empreinte) : compte rendu présent non réadopté, réécrit reconnu',
         bloque(j1) and not bloque(j2), [j1.get('reason', '')[:60], j2])
+tcr = b.transcript('tcr', [humain('a'), humain('b'), humain('c')])
+b.appel('prompt', {'session_id': 'S106', 'prompt': 'Point de contrôle : relire les PR', 'transcript_path': tcr})
+b.appel('prompt', {'session_id': 'S106', 'prompt': 'quatrième, envoyée pendant le tour planifié', 'transcript_path': tcr})
+ajouter(tcr, {'type': 'user', 'origin': {'kind': 'scheduled'}, 'message': {'role': 'user', 'content': 'Point de contrôle : relire les PR'}})
+rc, j1 = b.stop('S106', tcr, session_crons=[{'id': 'c1', 'prompt': 'Point de contrôle'}])
+rc, j2 = b.stop('S106', tcr)
+verifie('30m3. demande humaine envoyée pendant un tour planifié, pas encore écrite : gardée jusqu\'au Stop suivant',
+        not bloque(j1) and bloque(j2) and '4 demandes' in j2.get('reason', ''), [j1, j2])
 verifie('30s3. état corrompu (types inattendus) : tamponne et Stop fonctionnent', r.returncode == 0 and 'S59' in r.stdout and rc == 0, [r.returncode, r.stdout, j])
 tpl2 = b.transcript('tpl2', [humain('a'), humain('b'), humain('c')])
 b.appel('prompt', {'session_id': 'S60', 'prompt': 'Point de contrôle : relire les PR', 'transcript_path': tpl2})
