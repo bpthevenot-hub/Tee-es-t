@@ -256,6 +256,19 @@ jt, _ = sous_claude('stop', {'session_id': 'S20t', 'transcript_path': t4, 'stop_
 jt2, _ = sous_claude('stop', {'session_id': 'S20u', 'transcript_path': t4, 'stop_hook_active': False}, 'user,project')
 verifie('29t. copie utilisateur 3.6 enregistrée, session --setting-sources project : la copie du dépôt agit (et se tait avec « user »)',
         bloque(jt) and jt2 == {}, [jt, jt2])
+def sous_chaine(mode, entree, externe, interne):
+    """Claude Code « interne » (ses arguments : interne) lancé depuis un processus « externe » (ses arguments : externe)."""
+    code = "import subprocess, sys; i = sys.argv.index('::'); sys.exit(subprocess.run(sys.argv[i + 1:]).returncode)"
+    cmd = [sys.executable, '-c', code, *externe, '::', sys.executable, '-c', code, *interne, '::', 'bash', str(b.enveloppe), mode]
+    r = subprocess.run(cmd, input=json.dumps(entree), capture_output=True, text=True, timeout=30, env=b.env(VERROU))
+    brut = r.stdout.strip()
+    return json.loads(brut.splitlines()[-1]) if brut.startswith('{') else {}
+jn = sous_chaine('stop', {'session_id': 'S20w', 'transcript_path': t4, 'stop_hook_active': False},
+                 ['claude', '--setting-sources', 'project'], ['claude', '-p', 'tâche'])
+verifie('29t4. session sans drapeau lancée depuis un Claude Code qui en a un : seul le Claude Code de la session compte', jn == {}, jn)
+jr = sous_chaine('stop', {'session_id': 'S20x', 'transcript_path': t4, 'stop_hook_active': False},
+                 ['coquille'], ['claude', '--setting-sources', 'project', '--setting-sources', 'user,project'])
+verifie('29t5. drapeau répété : le dernier l\'emporte, comme dans Claude Code', jr == {}, jr)
 (inst / 'vive_memoire.py').write_text("VERSION = '3.5'\n")
 b.poser_dette('VIEILLE35', nb=5, t=0)
 rc, j35, out35, _ = b.appel('debut', {'session_id': 'S20r', 'source': 'startup'}, VERROU)
@@ -267,9 +280,17 @@ sonde = ("import builtins, os, sys; sys.argv = ['x']; sys.path.insert(0, sys.arg
          "    return vrai(f, *a, **k)\n"
          "builtins.open = faux\n"
          "lu = m.ligne_de_commande(os.getpid())\n"
-         "print('PS-OK' if lu and lu[1] == os.getppid() and any('sonde-ps' in x for x in lu[0]) else 'PS-KO', m.reglages_utilisateur_charges())\n") % str(b.hooks)
+         "texte = lu[0] if lu and isinstance(lu[0], str) else ' '.join(lu[0] if lu else [])\n"
+         "print('PS-OK' if lu and lu[1] == os.getppid() and 'sonde-ps' in texte else 'PS-KO', m.reglages_utilisateur_charges())\n") % str(b.hooks)
 r_ps = subprocess.run([sys.executable, '-I', '-c', sonde, 'sonde-ps'], capture_output=True, text=True, timeout=30, env=b.env())
 verifie('29t3. sans /proc (macOS) : la ligne de commande est lue par « ps », sans erreur', 'PS-OK True' in r_ps.stdout, [r_ps.stdout, r_ps.stderr[-300:]])
+sonde2 = ("import sys; sys.argv = ['x']; sys.path.insert(0, %r); import vive_memoire as m\n"
+          "f = m.sources_reglages\n"
+          "print(f('/opt/claude --setting-sources project, user --verbose'), f('node cli.js --setting-sources=project,local'),"
+          " f('claude -- --setting-sources project'), f('claude --setting-sources project --setting-sources=user'))\n") % str(b.hooks)
+r_ps2 = subprocess.run([sys.executable, '-I', '-c', sonde2], capture_output=True, text=True, timeout=30, env=b.env())
+verifie('29t6. texte de « ps » : valeur avec espaces après les virgules, forme =, arrêt à --, dernier drapeau',
+        r_ps2.stdout.strip() == "['project', 'user'] ['project', 'local'] None ['user']", [r_ps2.stdout, r_ps2.stderr[-300:]])
 _, out35p = sous_claude('debut', {'session_id': 'S20v', 'source': 'startup'}, 'project,local')
 verifie('29t2. copie utilisateur 3.5, session sans réglages utilisateur : le dépôt rappelle les dettes au démarrage', 'VIEILLE35' in out35p, out35p[:200])
 b.python('tamponne', 'VIEILLE35') if False else (b.etat / 'dettes' / 'VIEILLE35.json').unlink()
@@ -822,6 +843,75 @@ rc, j1 = b.stop('S115', t115)
 os.utime(cra, (t0 + 30, t0 + 30))
 rc, j2 = b.stop('S115', t115)
 verifie('30bt. deux comptes rendus de la même session : toucher l\'autre fichier ne le réadopte pas', not r0 and bloque(j1) and bloque(j2), [r0, j1.get('reason', '')[:40], j2])
+# adoption d'un compte rendu : seulement s'il couvre davantage
+tm122 = ecrire_t('M122', tours('', 10)); ajouter(tm122, *tours('m', 6, parent='a2', debut=3))
+(mem / 'sessions/2026-10-15-M122.md').write_text('Session : M122\nDemandes : 10\nAncre : a10\n')
+ecrire_t('F122', herite(tours('', 2) + tours('m', 6, parent='a2', debut=3), 'M122'))
+b.python('tamponne', 'F122')
+b.stop('M122', tm122)
+ajouter(tm122, *tours('m', 2, parent='ma8', debut=9))
+rc, j122 = b.stop('M122', tm122)
+verifie('30bu. compte rendu d\'avant le /rewind vu pour la première fois : ne remplace pas une couverture plus large', not bloque(j122), [j122, etat_de('M122')])
+# signatures de 3.14 (empreinte du fichier entier) : reconnues
+t123 = b.transcript('t123', tours('', 10))
+cr123 = mem / 'sessions/2026-10-15-S123.md'; cr123.write_text('Session : S123\nDemandes : 10\n\nSynthèse.\n')
+h314 = hashlib.sha1('\n'.join(x.rstrip() for x in cr123.read_text().splitlines()).strip().encode()).hexdigest()[:16]
+(b.etat / 'S123.json').write_text(json.dumps({'tampon': 10, 'ancre_tampon': 'a10', 'rapports_vus': [[10, '', h314]], 'transcript': t123}))
+ajouter(t123, *tours('v', 8, parent='a2', debut=3))
+t_n = time.time() + 30; os.utime(cr123, (t_n, t_n))
+rc, j123 = b.stop('S123', t123)
+verifie('30bv. état de 3.14 (empreinte du fichier entier) : compte rendu déjà vu, pas réadopté', bloque(j123), j123)
+# mère reconstruite après la fourche : sa nouvelle dette n'est pas effacée par la fourche
+tmr = ecrire_t('M124', tours('', 10)); ecrire_t('F124', herite(tours('', 10), 'M124'))
+Path(tmr).write_text('\n'.join(json.dumps(x) for x in [frontiere('a10')] + tours('r', 9, parent='B')) + '\n')
+b.stop('M124', tmr)
+b.python('tamponne', 'F124')
+verifie('30bx. mère au transcript reconstruit après la fourche : la synthèse de la fourche n\'efface pas sa nouvelle dette', 'M124' in b.dette(), list(b.dette()))
+# nouvelle synthèse dans un second fichier, l'ancien touché ensuite
+t125 = b.transcript('t125', tours('', 10))
+ca = mem / 'sessions/2026-10-15-S125.md'; ca.write_text('Session : S125\nDemandes : 10\n\nPremière synthèse.\n')
+b.stop('S125', t125)
+ajouter(t125, *tours('w', 8, parent='a2', debut=3))
+rc, j1 = b.stop('S125', t125)
+cb = mem / 'sessions/2026-10-15-S125-bis.md'; cb.write_text('Session : S125\nDemandes : 10\n\nSynthèse refaite.\n')
+t_n = time.time() + 30; os.utime(cb, (t_n, t_n)); os.utime(ca, (t_n + 10, t_n + 10))
+rc, j2 = b.stop('S125', t125)
+verifie('30by. synthèse refaite dans un second fichier, le premier touché après : la nouvelle est adoptée', bloque(j1) and not bloque(j2), [j1.get('reason', '')[:40], j2])
+# section : finit au bloc d'une autre session, pas à une ligne qui commence par « Session : »
+t126 = b.transcript('t126', tours('', 10))
+c126 = mem / 'sessions/2026-10-15-S126.md'; c126.write_text('Session : S126\nDemandes : 10\n\nSession : reprise prévue demain.\n')
+b.stop('S126', t126)
+ajouter(t126, *tours('w', 8, parent='a2', debut=3))
+rc, j1 = b.stop('S126', t126)
+with open(c126, 'a', encoding='utf-8') as f:
+    f.write('\nSynthèse refaite après le /rewind.\n')
+t_n = time.time() + 30; os.utime(c126, (t_n, t_n))
+rc, j2 = b.stop('S126', t126)
+verifie('30bz. complément écrit après une ligne « Session : » qui n\'est pas un bloc : reconnu', bloque(j1) and not bloque(j2), [j1.get('reason', '')[:40], j2])
+# démarrage : état perdu, compte rendu déjà présent à la dette ou ancré sur une branche quittée
+t127 = b.transcript('t127', tours('', 10))
+c127 = mem / 'sessions/2026-10-15-S127.md'; c127.write_text('Session : S127\nDemandes : 10\n')
+b.stop('S127', t127)
+ajouter(t127, *tours('w', 8, parent='a2', debut=3))
+[b.stop('S127', t127) for _ in range(4)]
+(b.etat / 'S127.json').unlink()
+t_n = time.time() + 30; os.utime(c127, (t_n, t_n))
+rc, j, out127, _ = b.appel('debut', {'session_id': 'S127', 'source': 'resume'})
+t128 = ecrire_t('S128', tours('', 10)); ajouter(t128, *tours('p', 8, parent='a2', debut=3))
+b.stop('S128', t128)
+(mem / 'sessions/2026-10-15-S128.md').write_text('Session : S128\nDemandes : 10\nAncre : a10\n')
+(b.etat / 'S128.json').unlink()
+rc, j, out128, _ = b.appel('debut', {'session_id': 'S128', 'source': 'resume'})
+verifie('30ca. démarrage, état perdu : un compte rendu touché par un checkout, ou ancré sur une branche quittée, ne solde pas la dette',
+        'S127' in out127 and 'S127' in b.dette() and 'S128' in out128 and 'S128' in b.dette(), [out127[:120], out128[:120], list(b.dette())])
+# pause sans fin : la dette garde son âge
+t129 = b.transcript('t129', tours('', 6))
+b.stop('S129', t129, background_tasks=[{'id': 'w1', 'status': 'running'}])
+d129 = json.loads((b.etat / 'dettes/S129.json').read_text()); d129['t'] -= 7200
+(b.etat / 'dettes/S129.json').write_text(json.dumps(d129))
+b.stop('S129', t129, background_tasks=[{'id': 'w1', 'status': 'running'}])
+rc, j, out129, _ = b.appel('debut', {'session_id': 'AUTRE-129', 'source': 'startup'})
+verifie('30cb. Stop répétés pendant une pause, même compte : la dette garde son âge et est rappelée', 'S129' in out129, out129[:160])
 t105 = b.transcript('t105', tours('', 10))
 cr105 = mem / 'sessions/2026-10-15-S105.md'; cr105.write_text('Session : S105\nDemandes : 10\n')
 (b.etat / 'S105.json').write_text(json.dumps({'tampon': 10, 'ancre_tampon': 'a10', 'rapports_vus': [[10, '']], 'transcript': t105}))
@@ -840,6 +930,10 @@ rc, j1 = b.stop('S106', tcr, session_crons=[{'id': 'c1', 'prompt': 'Point de con
 rc, j2 = b.stop('S106', tcr)
 verifie('30m3. demande humaine envoyée pendant un tour planifié, pas encore écrite : gardée jusqu\'au Stop suivant',
         not bloque(j1) and bloque(j2) and '4 demandes' in j2.get('reason', ''), [j1, j2])
+(b.etat / 'S121.json').write_text(json.dumps({'rapports_vus': [None, 5, [4, '', 'x'], ['a', ['b']], 'z']}))
+(mem / 'sessions/2026-10-15-S121.md').write_text('Session : S121\nDemandes : 2\n')
+rc121, j121 = b.stop('S121', b.transcript('t121', tours('', 12)))
+verifie('30s4. rapports_vus aux éléments invalides : le Stop fonctionne et relance', rc121 == 0 and bloque(j121), j121)
 verifie('30s3. état corrompu (types inattendus) : tamponne et Stop fonctionnent', r.returncode == 0 and 'S59' in r.stdout and rc == 0, [r.returncode, r.stdout, j])
 tpl2 = b.transcript('tpl2', [humain('a'), humain('b'), humain('c')])
 b.appel('prompt', {'session_id': 'S60', 'prompt': 'Point de contrôle : relire les PR', 'transcript_path': tpl2})
