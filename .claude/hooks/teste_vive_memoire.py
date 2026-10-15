@@ -1,4 +1,4 @@
-"""Banc des hooks « vive mémoire » : une soixantaine de vérifications, dans un HOME et un état temporaires isolés.
+"""Banc des hooks « vive mémoire » : près de cent cinquante vérifications, dans un HOME et un état temporaires isolés.
 
 Usage : python3 teste_vive_memoire.py      (code 0 si tout passe)
 """
@@ -647,6 +647,55 @@ verifie('30bd. compte rendu touché par un checkout (même contenu) : pas réado
 b.poser_dette('S99', nb=6, ancre='a6', t=time.time())
 rc, j = b.stop('S99', b.transcript('S99', [frontiere('ailleurs')] + tours('r', 2, parent='B')))
 verifie('30be. transcript reconstruit sous le seuil : la dette jamais synthétisée reste', 'S99' in b.dette(), list(b.dette()))
+# --- v3.14 (revue Codex sur bde2315)
+tq = b.transcript('tq', tours('', 3) + [file_humaine('en file, abandonnée', 'QA1')] + tours('', 1, parent='a3', debut=4)
+                  + tours('bis', 1, parent='a2', debut=3))
+rc, j = b.stop('S100', tq)
+tq2 = b.transcript('tq2', tours('', 4) + [humain('c bis', uuid='bish3', parentUuid='a2'), file_humaine('en file, active', 'QA2'),
+                                          assistant('bisa3', 'bish3')])
+rc2, j2 = b.stop('S101', tq2)
+verifie('30bf. /rewind : commande en file sans uuid sur la branche quittée exclue, sur la branche active comptée',
+        not bloque(j) and bloque(j2) and '4 demandes' in j2.get('reason', ''), [j, j2])
+(proj / 'M11.jsonl').write_text('\n'.join(json.dumps(x) for x in tours('', 10)) + '\n')
+b.python('tamponne', 'M11')
+ajouter(str(proj / 'M11.jsonl'), *tours('m', 8, parent='a2', debut=3))
+actifs_m11 = tours('', 2) + tours('m', 3, parent='a2', debut=3)
+(proj / 'F11.jsonl').write_text('\n'.join(json.dumps(x) for x in herite(actifs_m11, 'M11')) + '\n')
+b.python('tamponne', 'F11')
+rc, j = b.stop('M11', str(proj / 'M11.jsonl'))
+verifie('30bg. fourche synthétisée après un /rewind de la mère : comparée à sa couverture effective, pas à son tampon brut',
+        not bloque(j) and json.loads((b.etat / 'M11.json').read_text()).get('tampon') == 5, [j, json.loads((b.etat / 'M11.json').read_text()).get('tampon')])
+t102 = proj / 'S102.jsonl'
+t102.write_text('\n'.join(json.dumps(x) for x in tours('', 4)) + '\n')
+b.python('tamponne', 'S102')
+ajouter(str(t102), *tours('', 8, parent='a4', debut=5))
+rc, j1 = b.stop('S102', str(t102))
+t102.write_text('\n'.join(json.dumps(x) for x in [frontiere('a12')] + tours('r', 2, parent='B')) + '\n')
+rc, j2 = b.stop('S102', str(t102))
+verifie('30bh. transcript reconstruit qui perd les ancres : la dette jamais synthétisée reste',
+        bloque(j1) and 'S102' in b.dette(), [j1.get('reason', '')[:60], j2, list(b.dette())])
+t103 = b.transcript('t103', tours('', 10))
+cr103 = mem / 'sessions/2026-10-15-S103.md'; cr103.write_text('Session : S103\nDemandes : 10\n\nPremière synthèse.\n')
+r0 = bloque(b.stop('S103', t103)[1])
+ajouter(t103, *tours('w', 8, parent='a2', debut=3))
+rc, j1 = b.stop('S103', t103)
+cr103.write_text('Session : S103\nDemandes : 10\n\nSynthèse refaite après le /rewind.\n')
+t_n = time.time() + 30; os.utime(cr103, (t_n, t_n))
+rc, j2 = b.stop('S103', t103)
+verifie('30bi. compte rendu réécrit après /rewind, même en-tête : reconnu par son contenu', not r0 and bloque(j1) and not bloque(j2), [r0, j1, j2])
+tq3 = b.transcript('tq3', tours('', 3) + [dict(file_humaine('en file, fin de branche quittée', 'QA3'), parentUuid='a3')]
+                  + tours('bis', 1, parent='a2', debut=3))
+verifie('30bf2. commande en file sans uuid, dernière de la branche quittée (parent quitté) : exclue', not bloque(b.stop('S104', tq3)[1]))
+t105 = b.transcript('t105', tours('', 10))
+cr105 = mem / 'sessions/2026-10-15-S105.md'; cr105.write_text('Session : S105\nDemandes : 10\n')
+(b.etat / 'S105.json').write_text(json.dumps({'tampon': 10, 'ancre_tampon': 'a10', 'rapports_vus': [[10, '']], 'transcript': t105}))
+ajouter(t105, *tours('v', 8, parent='a2', debut=3))
+t_n = time.time() + 30; os.utime(cr105, (t_n, t_n))
+rc, j1 = b.stop('S105', t105)
+cr105.write_text('Session : S105\nDemandes : 10\n\nRéécrit après le /rewind.\n'); os.utime(cr105, (t_n + 5, t_n + 5))
+rc, j2 = b.stop('S105', t105)
+verifie('30bj. état de 3.13 (signature sans empreinte) : compte rendu présent non réadopté, réécrit reconnu',
+        bloque(j1) and not bloque(j2), [j1.get('reason', '')[:60], j2])
 verifie('30s3. état corrompu (types inattendus) : tamponne et Stop fonctionnent', r.returncode == 0 and 'S59' in r.stdout and rc == 0, [r.returncode, r.stdout, j])
 tpl2 = b.transcript('tpl2', [humain('a'), humain('b'), humain('c')])
 b.appel('prompt', {'session_id': 'S60', 'prompt': 'Point de contrôle : relire les PR', 'transcript_path': tpl2})

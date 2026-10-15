@@ -41,7 +41,7 @@ try:
 except ImportError:          # hors macOS / Linux : pas de sérialisation, le reste marche
     fcntl = None
 
-VERSION = '3.13'
+VERSION = '3.14'
 SEUIL_MIN = 4        # demandes humaines avant d'exiger une synthèse
 SEUIL_REFRESH = 8    # nouvelles demandes depuis la dernière synthèse (ou libération)
 MAX_RELANCES = 3     # blocages consécutifs avant de laisser finir
@@ -180,6 +180,7 @@ def analyser_transcript(chemin: str):
     par Claude Code (last-prompt.leafUuid), dernière demande tapée (une feuille quelconque peut être
     le résultat latéral d'un appel d'outil parallèle) ; ce qui est écrit après l'ancre compte toujours."""
     liens, candidats, avec_origine, ids_prompt, ecrits, points = {}, [], False, set(), [], {}
+    sans_uuid = []                             # demandes sans uuid en attente de l'entrée qui les suit
     tete, fin = '', 0
     tapee = assistant = feuille_cc = ''
     try:
@@ -196,6 +197,9 @@ def analyser_transcript(chemin: str):
                     continue                   # sous-agent : ni demande, ni invite, ni branche
                 uuid = str(o.get('uuid') or '')
                 if uuid:
+                    for c in sans_uuid:
+                        c[5] = uuid
+                    sans_uuid = []
                     liens[uuid] = (str(o.get('parentUuid') or ''), str(o.get('logicalParentUuid') or ''), debut,
                                    str(o.get('timestamp') or '')[:19])
                     if o.get('type') == 'assistant':
@@ -239,15 +243,20 @@ def analyser_transcript(chemin: str):
                     elif t and not avec_origine and not t.startswith(TECHNIQUE):
                         cles = []
                 if cles is not None:
-                    candidats.append((uuid, cles, debut, mere))
+                    candidats.append([uuid, cles, debut, mere, str(o.get('parentUuid') or ''), ''])
+                    if not uuid:
+                        sans_uuid.append(candidats[-1])
     except OSError:
         pass
     ancre = max((u for u in (assistant, feuille_cc, tapee) if u in liens), key=lambda u: liens[u][2], default='')
     active, coupure = chaine_active(liens, ancre) if ancre else (None, -1)
     envois, positions, unites, herites, herites_uuids = set(), [], [], {}, {}
-    for uuid, cles, debut, mere in candidats:
-        if active is not None and uuid in liens and uuid not in active and coupure < debut < liens[ancre][2]:
-            continue                           # tour abandonné par /rewind
+    quittee = lambda u: u in liens and u not in active
+    for uuid, cles, debut, mere, parent, suivante in candidats:
+        if active is not None and coupure < debut < liens[ancre][2] and (
+                quittee(uuid) if uuid else (quittee(parent) or quittee(suivante))):
+            continue                           # tour abandonné par /rewind (sans uuid : son parent ou l'entrée
+                                               # écrite juste après lui est sur la branche quittée)
         nouvelles = [c for c in dict.fromkeys(cles) if c not in envois] if cles else [None]
         envois.update(c for c in nouvelles if c)
         positions += [debut] * len(nouvelles)
@@ -346,9 +355,10 @@ def chemins_memoire() -> list:
 
 
 def rapport_durable(session: str):
-    """(nb, date, ancre) du compte rendu commité le plus récent portant le bloc « Session : <id> »,
-    « Demandes : <nb> » et, depuis 3.11, « Ancre : <uuid> » (survit au conteneur) ; (-1, 0.0, '')
-    sinon. Comptes rendus de même date (à 2 s près, ex. un clone frais) : le plus grand compte."""
+    """(nb, date, ancre, empreinte) du compte rendu commité le plus récent portant le bloc « Session : <id> »,
+    « Demandes : <nb> » et, depuis 3.11, « Ancre : <uuid> » (survit au conteneur) ; (-1, 0.0, '', '')
+    sinon. Comptes rendus de même date (à 2 s près, ex. un clone frais) : le plus grand compte.
+    L'empreinte (contenu normalisé) distingue un compte rendu réécrit d'un fichier seulement touché."""
     deco = r'[ \t>*_`-]*'
     motif = re.compile(r'^' + deco + 'Session' + deco + ':' + deco + re.escape(session) + deco + r'\r?\n'
                        + deco + 'Demandes' + deco + ':' + deco + r'(\d+)'
@@ -361,32 +371,48 @@ def rapport_durable(session: str):
             continue
         for cr in fichiers:
             try:
-                blocs = list(motif.finditer(cr.read_text(encoding='utf-8', errors='replace')))
+                texte = cr.read_text(encoding='utf-8', errors='replace')
                 date = cr.stat().st_mtime
             except OSError:
                 continue
+            blocs = list(motif.finditer(texte))
             if blocs:                          # compte rendu complété : son dernier bloc fait foi
-                trouves.append((date, int(blocs[-1].group(1)), blocs[-1].group(2) or ''))
+                normal = '\n'.join(ligne.rstrip() for ligne in texte.splitlines()).strip()
+                trouves.append((date, int(blocs[-1].group(1)), blocs[-1].group(2) or '',
+                                hashlib.sha1(normal.encode('utf-8', 'replace')).hexdigest()[:16]))
     if not trouves:
-        return -1, 0.0, ''
-    recente = max(d for d, _, _ in trouves)
-    n, _, ancre = max((n, d, x) for d, n, x in trouves if d >= recente - 2)
-    return n, recente, ancre
+        return -1, 0.0, '', ''
+    recente = max(t[0] for t in trouves)
+    n, _, ancre, marque = max((n, d, x, h) for d, n, x, h in trouves if d >= recente - 2)
+    return n, recente, ancre, marque
 
 
 def tampon_durable(session: str) -> int:
     return rapport_durable(session)[0]
 
 
+def couverture_propre(session: str, etat: dict) -> int:
+    """Ce que couvre encore le tampon d'une session sur sa branche active (après un /rewind chez elle,
+    seules les demandes encore actives) ; transcript introuvable : son tampon borné à sa couverture notée."""
+    tampon = entier(etat.get('tampon'))
+    chemin = str(etat.get('transcript') or '')
+    if not chemin or not os.path.isfile(chemin):
+        chemin = trouver_transcript(session)
+    if tampon < 0 or not chemin:
+        return min(tampon, entier(etat.get('couvert'), tampon))
+    return couvertes(analyser_transcript(chemin), str(etat.get('ancre_tampon') or ''), tampon, bool(etat.get('ancre_souple')))
+
+
 def couvrir_mere(mere: str, herite: int, point: str) -> None:
     """La synthèse d'une fourche couvre sa mère jusqu'au point de fourche : tampon posé chez la mère (lu,
     comparé et écrit sous son verrou), ancré au point de fourche pour qu'un /rewind de la mère le ramène ;
-    souple : si ses uuids diffèrent de ceux de la fourche, l'ancre absente ne vaut pas zéro."""
+    souple : si ses uuids diffèrent de ceux de la fourche, l'ancre absente ne vaut pas zéro. Comparé à ce
+    que le tampon de la mère couvre encore (un /rewind chez elle a pu le réduire), pas à sa valeur brute."""
     f_mere = dossier_etat() / (nom_sur(mere) + '.json')
     with verrou_session(mere):
         etat_mere = lire_json(f_mere, {})
         etat_mere = etat_mere if isinstance(etat_mere, dict) else {}
-        if entier(etat_mere.get('tampon')) < herite:
+        if couverture_propre(mere, etat_mere) < herite:
             etat_mere.update({'tampon': herite, 'ancre_tampon': point, 'ancre_souple': True, 't_tampon': time.time(),
                               'couvert': max(entier(etat_mere.get('couvert')), herite)})
             ecrire_json(f_mere, etat_mere)
@@ -482,10 +508,10 @@ def mode_tamponne(session: str, transcript: str) -> int:
         return 1
     a = analyser_transcript(chemin)
     nb, parents = compter(etat, a), a.parents
-    valeur, date, ancre_rapport = rapport_durable(session)
+    valeur, date, ancre_rapport, marque = rapport_durable(session)
     vus = etat.get('rapports_vus') if isinstance(etat.get('rapports_vus'), list) else []
-    if valeur >= 0 and [valeur, ancre_rapport] not in vus:
-        vus = (vus + [[valeur, ancre_rapport]])[-20:]       # le compte rendu de cette synthèse : déjà connu
+    if valeur >= 0 and [valeur, ancre_rapport, marque] not in vus:
+        vus = (vus + [[valeur, ancre_rapport, marque]])[-20:]   # le compte rendu de cette synthèse : déjà connu
     etat.update({'tampon': nb, 'ancre_tampon': a.ancre, 'ancre_souple': False, 't_tampon': time.time(), 'rapports_vus': vus,
                  'couvert': nb,
                  'relances': 0, 'date_tampon': time.strftime('%Y-%m-%d %H:%M')})
@@ -510,7 +536,7 @@ def synthese_depuis(session: str, t: float) -> int:
     etat = lire_json(dossier_etat() / (nom_sur(session) + '.json'), {})
     etat = etat if isinstance(etat, dict) else {}
     valeurs = [entier(etat.get('tampon'))] if reel(etat.get('t_tampon')) > t else []
-    valeur, date, _ = rapport_durable(session)
+    valeur, date, _, _ = rapport_durable(session)
     if date > t:
         valeurs.append(valeur)
     return max(valeurs, default=-1)
@@ -623,16 +649,19 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     # demandes encore actives restent couvertes). Un compte rendu nouveau (synthèse écrite sans
     # « tamponne », état perdu, transcript reconstruit) est ancré ici comme un tampon, plafonné au
     # compte du transcript, dès le premier Stop qui le voit : /rewind le ramène ensuite de même.
-    valeur, date, ancre_rapport = rapport_durable(session)
+    valeur, date, ancre_rapport, marque = rapport_durable(session)
     souple = bool(etat.get('ancre_souple'))
     actif = couvertes(a, str(etat.get('ancre_tampon') or ''), entier(etat.get('tampon')), souple)
     rapport = -1
-    # Un compte rendu se reconnaît à son contenu (compte, ancre), pas à la date du fichier (un checkout
-    # ou un clone la change). État d'avant 3.13 : les comptes rendus présents sont réputés déjà vus.
-    signature = [valeur, ancre_rapport]
+    # Un compte rendu se reconnaît à son contenu (compte, ancre, empreinte du texte), pas à la date du
+    # fichier (un checkout ou un clone la change) : réécrit après un /rewind avec le même en-tête, il est
+    # relu. État d'avant 3.13 : les comptes rendus présents sont réputés déjà vus ; signatures de 3.13
+    # (sans empreinte) : rattachées au compte rendu présent qui leur correspond.
+    signature = [valeur, ancre_rapport, marque]
     vus = etat.get('rapports_vus')
     if not isinstance(vus, list):
         vus = [signature] if valeur >= 0 and (entier(etat.get('tampon')) >= 0 or etat.get('rapport_vu')) else []
+    vus = [x + [marque] if isinstance(x, list) and len(x) == 2 and x == signature[:2] else x for x in vus]
     if valeur >= 0 and not a.ancre:
         rapport = valeur                 # transcript sans uuid : compte rendu pris tel quel
     elif valeur >= 0 and signature not in vus:
@@ -657,7 +686,12 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     d = dettes.get(session)
     if isinstance(d, dict):
         rembobinee = abandonnee(a, str(d.get('ancre') or ''))       # la dette est sur une branche quittée par /rewind
-        if synthese >= 0 and not due_synthese:
+        # Preuve que la synthèse couvre la dette : elle en couvre au moins le compte, elle a été faite après
+        # elle, ou la dette est ancrée dans ce transcript (comptes comparables). Un transcript reconstruit
+        # depuis une compaction, plus court, ne suffit pas à la solder.
+        preuve = (synthese >= entier(d.get('nb'), 0) or reel(etat.get('t_tampon')) > reel(d.get('t'))
+                  or str(d.get('ancre') or '') in a.liens)
+        if synthese >= 0 and not due_synthese and preuve:
             effacer_dette(session)       # synthèse reconnue (même sans « tamponne »)
         elif rembobinee and not due_synthese:
             effacer_dette(session)       # /rewind sous le seuil : plus rien à synthétiser
