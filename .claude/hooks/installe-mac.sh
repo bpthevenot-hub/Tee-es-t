@@ -55,7 +55,16 @@ reglages, cible, mode = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 EVTS = ('Stop', 'UserPromptSubmit', 'SessionStart')
 # Nos commandes : un de nos deux scripts, quel que soit son dossier, suivi au plus d'un de nos modes.
 # Une commande voisine qui contient seulement « vive-memoire » (ex. ~/bin/vive-memoire-audit) reste.
-NOTRE = re.compile(r"""^\s*(?:bash\s+)?(?:"[^"]*/|'[^']*/|\S*/)?vive-memoire-(?:stop|prompt)\.sh["']?(?:\s+(?:stop|prompt|debut))?\s*$""")
+def notre(commande):
+    """Une de nos commandes : bash <…>/vive-memoire-stop.sh|prompt.sh [stop|prompt|debut], quelle que soit la citation."""
+    try:
+        mots = shlex.split(str(commande or ''))
+    except ValueError:
+        return False
+    if mots and mots[0] == 'bash':
+        mots = mots[1:]
+    return 1 <= len(mots) <= 2 and bool(re.search(r'(^|/)vive-memoire-(stop|prompt)\.sh$', mots[0])) \
+        and (len(mots) == 1 or mots[1] in ('stop', 'prompt', 'debut'))
 texte = reglages.read_text(encoding='utf-8') if reglages.exists() else ''
 try:
     s = json.loads(texte) if texte.strip() else {}
@@ -73,7 +82,7 @@ for evt in EVTS:
     for g in h.get(evt, []):     # ne retirer que nos commandes ; tout le reste est gardé tel quel
         if isinstance(g, dict) and isinstance(g.get('hooks'), list):
             avant = len(g['hooks'])
-            g['hooks'] = [x for x in g['hooks'] if not (isinstance(x, dict) and NOTRE.match(str(x.get('command', ''))))]
+            g['hooks'] = [x for x in g['hooks'] if not (isinstance(x, dict) and notre(x.get('command', '')))]
             if avant and not g['hooks']:
                 continue
         groupes.append(g)

@@ -521,6 +521,22 @@ for k, x in enumerate(lots):
 [x.wait(timeout=60) for x in lots]
 notees = json.loads((b.etat / 'S81.json').read_text()).get('prompts', [])
 verifie('30ak. 15 demandes envoyées en même temps : aucune perdue (état sérialisé)', len(notees) == 15, len(notees))
+def herite(entrees, mere):
+    return [dict(x, forkedFrom={'sessionId': mere}) for x in entrees]
+(proj / 'M1.jsonl').write_text('\n'.join(json.dumps(x) for x in tours('', 10) + tours('m', 8, parent='a2', debut=3)) + '\n')
+b.python('tamponne', 'M1')
+rc, j = b.stop('F1', b.transcript('F1', herite(tours('', 10), 'M1')))
+verifie('30am. fourche : la synthèse de la mère faite après un /rewind ne couvre que les demandes héritées encore chez elle',
+        bloque(j) and '10 demandes' in j.get('reason', ''), j)
+(proj / 'F2.jsonl').write_text('\n'.join(json.dumps(x) for x in herite(tours('', 10), 'M2')) + '\n')
+b.python('tamponne', 'F2')
+tm2 = b.transcript('M2', tours('', 10))
+ajouter(tm2, *tours('n', 8, parent='a2', debut=3))
+rc, j = b.stop('M2', tm2)
+verifie('30an. tampon posé par la fourche chez la mère : ramené par un /rewind de la mère', bloque(j) and '10 demandes' in j.get('reason', ''), j)
+b.poser_dette('CLOS', nb=6, t=time.time())
+rc, j, out, _ = b.appel('debut', {'session_id': 'NOUVELLE', 'source': 'clear'})
+verifie('30ap. /clear : la dette récente de la session close est rappelée', 'CLOS' in out, out[:200])
 verifie('30s3. état corrompu (types inattendus) : tamponne et Stop fonctionnent', r.returncode == 0 and 'S59' in r.stdout and rc == 0, [r.returncode, r.stdout, j])
 tpl2 = b.transcript('tpl2', [humain('a'), humain('b'), humain('c')])
 b.appel('prompt', {'session_id': 'S60', 'prompt': 'Point de contrôle : relire les PR', 'transcript_path': tpl2})
@@ -637,6 +653,13 @@ verifie('46. chemin de config avec $, " et espace : commande citée, script trou
 r = installer(b.racine / 'mac12', cwd=str(b.racine / 'travail'), sup={'CLAUDE_CONFIG_DIR': 'conf-relative'})
 cmd_rel = json.loads((b.racine / 'travail/conf-relative/settings.json').read_text())['hooks']['Stop'][-1]['hooks'][0]['command']
 verifie('47. CLAUDE_CONFIG_DIR relatif : commande enregistrée en chemin absolu', r.returncode == 0 and Path(shlex.split(cmd_rel)[1]).is_absolute(), cmd_rel)
+ami = b.racine / "conf l'ami"
+installer(b.racine / 'mac13', sup={'CLAUDE_CONFIG_DIR': str(ami)})
+installer(b.racine / 'mac13', sup={'CLAUDE_CONFIG_DIR': str(ami)})
+nos = [h['command'] for g in json.loads((ami / 'settings.json').read_text())['hooks']['Stop'] for h in g['hooks']]
+r = installer(b.racine / 'mac13', '--retirer', sup={'CLAUDE_CONFIG_DIR': str(ami)})
+reste = json.loads((ami / 'settings.json').read_text()).get('hooks', {})
+verifie('48. chemin avec espace et apostrophe : une seule inscription, et --retirer l\'enlève', len(nos) == 1 and r.returncode == 0 and not reste, [nos, reste])
 shutil.rmtree(b.racine, ignore_errors=True)
 print(f'\n{total} vérifications, {len(echecs)} échec(s)')
 sys.exit(1 if echecs else 0)
