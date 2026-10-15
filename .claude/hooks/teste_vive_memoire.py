@@ -934,6 +934,14 @@ verifie('30m3. demande humaine envoyée pendant un tour planifié, pas encore é
 (mem / 'sessions/2026-10-15-S121.md').write_text('Session : S121\nDemandes : 2\n')
 rc121, j121 = b.stop('S121', b.transcript('t121', tours('', 12)))
 verifie('30s4. rapports_vus aux éléments invalides : le Stop fonctionne et relance', rc121 == 0 and bloque(j121), j121)
+egare = b.home / '.claude/projects/-tmp-agent'; egare.mkdir(parents=True, exist_ok=True)
+(egare / 'S130.jsonl').write_text(json.dumps(ancien('une')) + '\n')
+principal = proj / 'S130.jsonl'; principal.write_text('\n'.join(json.dumps(x) for x in tours('', 10)) + '\n')
+sonde3 = ("import sys; sys.argv = ['x']; sys.path.insert(0, %r); import vive_memoire as m\n"
+          "m.glob.glob = lambda motif: [%r, %r]\n"
+          "print(m.trouver_transcript('S130'))\n") % (str(b.hooks), str(egare / 'S130.jsonl'), str(principal))
+r130 = subprocess.run([sys.executable, '-I', '-c', sonde3], capture_output=True, text=True, timeout=30, env=b.env())
+verifie('30cd. deux transcripts du même nom (un agent lancé ailleurs) : le principal est choisi', r130.stdout.strip() == str(principal), [r130.stdout, r130.stderr[-200:]])
 verifie('30s3. état corrompu (types inattendus) : tamponne et Stop fonctionnent', r.returncode == 0 and 'S59' in r.stdout and rc == 0, [r.returncode, r.stdout, j])
 tpl2 = b.transcript('tpl2', [humain('a'), humain('b'), humain('c')])
 b.appel('prompt', {'session_id': 'S60', 'prompt': 'Point de contrôle : relire les PR', 'transcript_path': tpl2})

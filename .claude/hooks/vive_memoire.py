@@ -43,7 +43,7 @@ try:
 except ImportError:          # hors macOS / Linux : pas de sérialisation, le reste marche
     fcntl = None
 
-VERSION = '3.17'
+VERSION = '3.18'
 SEUIL_MIN = 4        # demandes humaines avant d'exiger une synthèse
 SEUIL_REFRESH = 8    # nouvelles demandes depuis la dernière synthèse (ou libération)
 MAX_RELANCES = 3     # blocages consécutifs avant de laisser finir
@@ -319,9 +319,16 @@ def dossier_projets() -> Path:
 
 
 def trouver_transcript(session: str) -> str:
-    motif = str(dossier_projets() / '*' / (session + '.jsonl'))
-    trouves = glob.glob(motif)
-    return trouves[0] if trouves else ''
+    """Transcript de la session dans les dossiers de projets. Plusieurs fichiers du même nom (un agent lancé
+    depuis un autre dossier écrit sous l'identifiant de la session) : le plus volumineux, puis le plus récent."""
+    def taille_date(chemin):
+        try:
+            st = os.stat(chemin)
+            return st.st_size, st.st_mtime
+        except OSError:
+            return -1, 0.0
+    trouves = glob.glob(str(dossier_projets() / '*' / (session + '.jsonl')))
+    return max(trouves, key=taille_date) if trouves else ''
 
 
 def compter(etat: dict, a, avec_attente: bool = True):
