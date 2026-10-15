@@ -561,6 +561,24 @@ etat_d = b.racine / 'etat-dettes-fichier'; etat_d.mkdir(); (etat_d / 'dettes').w
 msgs = [b.appel('stop', {'session_id': 'S90', 'transcript_path': t4}, {'VM_ETAT': str(etat_d)})[1] for _ in range(4)]
 verifie('30at. dette impossible à noter : le message ne promet pas de rappel', 'pas pu être notée' in msgs[-1].get('systemMessage', '')
         and 'rappelée au prochain démarrage' not in msgs[-1].get('systemMessage', ''), msgs[-1])
+import calendar
+def horodate(entrees, debut_min):
+    for k, x in enumerate(entrees):
+        x['timestamp'] = '2026-10-15T01:%02d:%02d.000Z' % (debut_min + k // 60, k % 60)
+    return entrees
+avant = horodate(tours('', 10), 0)
+apres = horodate(tours('r', 8, parent='a2', debut=3), 10)
+for nom, ancre_ligne in (('S92', ''), ('S93', '\nAncre : a10')):
+    cr = mem / f'sessions/2026-10-15-{nom}.md'
+    cr.write_text(f'Session : {nom}\nDemandes : 10{ancre_ligne}\n')
+    t_cr = calendar.timegm(time.strptime('2026-10-15T01:05:00', '%Y-%m-%dT%H:%M:%S')) if not ancre_ligne else time.time()
+    os.utime(cr, (t_cr, t_cr))
+    tr = b.transcript(nom, avant + apres)
+    rc_au, j_au = b.stop(nom, tr)
+    verifie(f'30au. compte rendu d\'avant un /rewind, état perdu ({"ligne Ancre" if ancre_ligne else "ancré par sa date"}) : la relance a lieu',
+            bloque(j_au) and '10 demandes' in j_au.get('reason', ''), j_au)
+r_av = b.python('tamponne', 'S1')
+verifie('30av. tamponne donne aussi la ligne « Ancre : » à recopier', 'Ancre :' in r_av.stdout, r_av.stdout)
 verifie('30s3. état corrompu (types inattendus) : tamponne et Stop fonctionnent', r.returncode == 0 and 'S59' in r.stdout and rc == 0, [r.returncode, r.stdout, j])
 tpl2 = b.transcript('tpl2', [humain('a'), humain('b'), humain('c')])
 b.appel('prompt', {'session_id': 'S60', 'prompt': 'Point de contrôle : relire les PR', 'transcript_path': tpl2})
@@ -684,6 +702,15 @@ nos = [h['command'] for g in json.loads((ami / 'settings.json').read_text())['ho
 r = installer(b.racine / 'mac13', '--retirer', sup={'CLAUDE_CONFIG_DIR': str(ami)})
 reste = json.loads((ami / 'settings.json').read_text()).get('hooks', {})
 verifie('48. chemin avec espace et apostrophe : une seule inscription, et --retirer l\'enlève', len(nos) == 1 and r.returncode == 0 and not reste, [nos, reste])
+h14 = b.racine / 'mac14'; h14.mkdir()
+installer(h14)
+(h14 / '.claude/skills/vive-memoire/notes-perso.txt').write_text('à garder')
+(h14 / '.claude/hooks/vive-memoire/vive_memoire.py').write_text('# version tronquée\n')
+r = installer(h14)
+restes = [x.name for x in (h14 / '.claude/hooks').iterdir()] + [x.name for x in (h14 / '.claude/skills').iterdir()]
+verifie('49. mise à jour par échange de dossiers : fichiers neufs, ajouts gardés, aucun reste',
+        r.returncode == 0 and (h14 / '.claude/skills/vive-memoire/notes-perso.txt').exists()
+        and 'VERSION' in (h14 / '.claude/hooks/vive-memoire/vive_memoire.py').read_text() and sorted(restes) == ['vive-memoire', 'vive-memoire'], restes)
 shutil.rmtree(b.racine, ignore_errors=True)
 print(f'\n{total} vérifications, {len(echecs)} échec(s)')
 sys.exit(1 if echecs else 0)

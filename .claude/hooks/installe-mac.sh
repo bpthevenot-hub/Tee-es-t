@@ -35,7 +35,7 @@ python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' || { e
 # vérifiés), enregistrement en dernier ; au retrait, enregistrement retiré d'abord, fichiers
 # ensuite. Jamais de commande vers un fichier absent.
 installer_fichiers() {
-  prep="$config/.vive-memoire-prep.$$"
+  prep="$config/hooks/.vive-memoire-prep.$$"      # même disque que la cible : renommage atomique
   rm -rf "$prep"; mkdir -p "$prep/hooks" "$prep/skill"
   cp "$ici/vive_memoire.py" "$ici/vive-memoire-stop.sh" "$ici/vive-memoire-prompt.sh" "$ici/installe-mac.sh" "$prep/hooks/"
   for f in SKILL.md bilan-template.html genere-bilan.py teste-bilan.mjs; do
@@ -43,9 +43,24 @@ installer_fichiers() {
   done
   [ -s "$prep/hooks/vive_memoire.py" ] && [ -s "$prep/hooks/vive-memoire-stop.sh" ] && [ -s "$prep/skill/SKILL.md" ] \
     || { rm -rf "$prep"; echo "Copie incomplète ; rien n'a été installé."; exit 1; }
-  mkdir -p "$cible_hooks" "$cible_skill"
-  cp "$prep/hooks/"* "$cible_hooks/"; cp "$prep/skill/"* "$cible_skill/"
+  # Remplacement d'un bloc : chaque dossier préparé prend la place de l'installé par renommage (même
+  # disque), avec retour à l'ancien en cas d'échec ; jamais de copie à moitié faite sous des hooks enregistrés.
+  mkdir -p "$config/hooks" "$config/skills"
+  echanger "$prep/hooks" "$cible_hooks" && echanger "$prep/skill" "$cible_skill" \
+    || { rm -rf "$prep"; echo "Remplacement impossible ; l'installation précédente est restée en place."; exit 1; }
   rm -rf "$prep"
+}
+echanger() {   # echanger <dossier préparé> <dossier installé>
+  if [ -d "$2" ]; then
+    cp -Rn "$2/." "$1/" 2>/dev/null || true      # fichiers ajoutés à la main : gardés (les nôtres priment)
+    mv "$2" "$2.ancien.$$" || return 1
+  fi
+  if mv "$1" "$2"; then
+    rm -rf "$2.ancien.$$"
+  else
+    if [ -d "$2.ancien.$$" ]; then mv "$2.ancien.$$" "$2"; fi
+    return 1
+  fi
 }
 enregistrer() {
 python3 - "$reglages" "$cible_hooks" "${1:-}" <<'PYEOF'

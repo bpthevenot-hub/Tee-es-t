@@ -41,7 +41,7 @@ try:
 except ImportError:          # hors macOS / Linux : pas de sérialisation, le reste marche
     fcntl = None
 
-VERSION = '3.10'
+VERSION = '3.11'
 SEUIL_MIN = 4        # demandes humaines avant d'exiger une synthèse
 SEUIL_REFRESH = 8    # nouvelles demandes depuis la dernière synthèse (ou libération)
 MAX_RELANCES = 3     # blocages consécutifs avant de laisser finir
@@ -143,7 +143,7 @@ def chaine_active(liens: dict, feuille):
         if u not in liens:
             return None, -1
         vus.add(u)
-        direct, logique, debut = liens[u]
+        direct, logique, debut, _ = liens[u]
         if not direct and logique and logique not in liens:
             coupure = debut
         u = direct or (logique if logique in liens else None)
@@ -196,7 +196,8 @@ def analyser_transcript(chemin: str):
                     continue                   # sous-agent : ni demande, ni invite, ni branche
                 uuid = str(o.get('uuid') or '')
                 if uuid:
-                    liens[uuid] = (str(o.get('parentUuid') or ''), str(o.get('logicalParentUuid') or ''), debut)
+                    liens[uuid] = (str(o.get('parentUuid') or ''), str(o.get('logicalParentUuid') or ''), debut,
+                                   str(o.get('timestamp') or '')[:19])
                     if o.get('type') == 'assistant':
                         assistant = uuid
                 if o.get('type') == 'last-prompt' and o.get('leafUuid'):
@@ -256,6 +257,18 @@ def analyser_transcript(chemin: str):
     return SimpleNamespace(nb=len(positions), positions=positions, unites=unites, liens=liens, active=active,
                            ancre=ancre, ids_prompt=ids_prompt, ecrits=ecrits, tete=tete, taille=fin, fourches=points,
                            herites_uuids=herites_uuids, parents={mere: len(c) for mere, c in herites.items()})
+
+
+def ancre_au_temps(a, date: float) -> str:
+    """Dernière entrée du transcript écrite au plus tard à « date » (heure UTC du transcript) ; '' si aucune."""
+    if date <= 0:
+        return ''
+    limite = time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime(date))
+    meilleur, position = '', -1
+    for u, (_, _, debut, ts) in a.liens.items():
+        if ts and ts <= limite and debut > position:
+            meilleur, position = u, debut
+    return meilleur
 
 
 def couvertes(a, ancre: str, n: int, souple: bool = False) -> int:
@@ -332,12 +345,13 @@ def chemins_memoire() -> list:
 
 
 def rapport_durable(session: str):
-    """(nb, date) du compte rendu commité le plus récent portant le bloc « Session : <id> » puis
-    « Demandes : <nb> » (survit au conteneur) ; (-1, 0.0) sinon. Comptes rendus de même date (à
-    2 s près, ex. un clone frais) : le plus grand compte."""
+    """(nb, date, ancre) du compte rendu commité le plus récent portant le bloc « Session : <id> »,
+    « Demandes : <nb> » et, depuis 3.11, « Ancre : <uuid> » (survit au conteneur) ; (-1, 0.0, '')
+    sinon. Comptes rendus de même date (à 2 s près, ex. un clone frais) : le plus grand compte."""
     deco = r'[ \t>*_`-]*'
     motif = re.compile(r'^' + deco + 'Session' + deco + ':' + deco + re.escape(session) + deco + r'\r?\n'
-                       + deco + 'Demandes' + deco + ':' + deco + r'(\d+)', re.M)
+                       + deco + 'Demandes' + deco + ':' + deco + r'(\d+)'
+                       + r'(?:' + deco + r'\r?\n' + deco + 'Ancre' + deco + ':' + deco + r'([0-9A-Za-z_-]+))?', re.M)
     trouves = []
     for memoire in chemins_memoire():
         try:
@@ -351,11 +365,12 @@ def rapport_durable(session: str):
             except OSError:
                 continue
             if m:
-                trouves.append((date, int(m.group(1))))
+                trouves.append((date, int(m.group(1)), m.group(2) or ''))
     if not trouves:
-        return -1, 0.0
-    recente = max(d for d, _ in trouves)
-    return max(n for d, n in trouves if d >= recente - 2), recente
+        return -1, 0.0, ''
+    recente = max(d for d, _, _ in trouves)
+    n, _, ancre = max((n, d, x) for d, n, x in trouves if d >= recente - 2)
+    return n, recente, ancre
 
 
 def tampon_durable(session: str) -> int:
@@ -446,7 +461,7 @@ def mode_tamponne(session: str, transcript: str) -> int:
         return 1
     a = analyser_transcript(chemin)
     nb, parents = compter(etat, a), a.parents
-    valeur, date = rapport_durable(session)
+    valeur, date, _ = rapport_durable(session)
     etat.update({'tampon': nb, 'ancre_tampon': a.ancre, 'ancre_souple': False, 't_tampon': time.time(), 'rapport_vu': [valeur, int(date)],
                  'relances': 0, 'date_tampon': time.strftime('%Y-%m-%d %H:%M')})
     ok = ecrire_json(f_etat, etat)
@@ -468,7 +483,8 @@ def mode_tamponne(session: str, transcript: str) -> int:
                     ecrire_json(f_mere, etat_mere)
     print(f'Vive mémoire : synthèse enregistrée pour la session {session} ({nb} demandes)'
           + ('' if ok else ' — ATTENTION : état non inscriptible, rien n\'a été écrit') + '.')
-    print(f'Inscris aussi « Session : {session} » et « Demandes : {nb} » dans le compte rendu de session.')
+    print(f'Inscris aussi, sur trois lignes, « Session : {session} », « Demandes : {nb} » et « Ancre : {a.ancre} » '
+          'dans le compte rendu de session.')
     return 0 if ok else 1
 
 
@@ -477,7 +493,7 @@ def synthese_depuis(session: str, t: float) -> int:
     etat = lire_json(dossier_etat() / (nom_sur(session) + '.json'), {})
     etat = etat if isinstance(etat, dict) else {}
     valeurs = [entier(etat.get('tampon'))] if reel(etat.get('t_tampon')) > t else []
-    valeur, date = rapport_durable(session)
+    valeur, date, _ = rapport_durable(session)
     if date > t:
         valeurs.append(valeur)
     return max(valeurs, default=-1)
@@ -570,7 +586,7 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     # demandes encore actives restent couvertes). Un compte rendu nouveau (synthèse écrite sans
     # « tamponne », état perdu, transcript reconstruit) est ancré ici comme un tampon, plafonné au
     # compte du transcript, dès le premier Stop qui le voit : /rewind le ramène ensuite de même.
-    valeur, date = rapport_durable(session)
+    valeur, date, ancre_rapport = rapport_durable(session)
     souple = bool(etat.get('ancre_souple'))
     actif = couvertes(a, str(etat.get('ancre_tampon') or ''), entier(etat.get('tampon')), souple)
     rapport = -1
@@ -578,7 +594,10 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
         if a.ancre:
             etat['rapport_vu'] = [valeur, int(date)]
             if valeur > actif:
-                etat.update({'tampon': min(valeur, nb), 'ancre_tampon': a.ancre, 'ancre_souple': False, 't_tampon': date})
+                # ancre du compte rendu : sa ligne « Ancre » si elle est au transcript, sinon l'entrée écrite
+                # juste avant lui (un compte rendu d'avant un /rewind ne couvre pas les demandes de remplacement)
+                ancre_r = ancre_rapport if ancre_rapport in a.liens else (ancre_au_temps(a, date) or a.ancre)
+                etat.update({'tampon': min(valeur, nb), 'ancre_tampon': ancre_r, 'ancre_souple': False, 't_tampon': date})
                 souple = False
         else:
             rapport = valeur             # transcript sans uuid : compte rendu pris tel quel
