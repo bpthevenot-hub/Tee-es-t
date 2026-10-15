@@ -17,8 +17,8 @@ Garanties : ne bloque jamais sur une erreur (toute exception rend la main sans b
 + dette rappelée sur la même machine (au démarrage d'une autre session plus d'une heure après,
 ou à la reprise de la même ; pas en cloud, où le conteneur ne survit pas), état propre à
 chaque session, ne compte que les demandes humaines de la branche active (pas les tours
-abandonnés par /rewind). Une seule copie agit par session : la copie utilisateur, quand elle
-tourne vraiment (marque par session), sinon celle du dépôt.
+abandonnés par /rewind, ni les sous-agents). Quand plusieurs copies (utilisateur, dépôt)
+reçoivent le même événement, une seule agit : la première à en poser le verrou.
 État : $VM_ETAT ou ~/.claude/vive-memoire/ (jamais dans un dépôt). Python 3.8+.
 """
 from __future__ import annotations
@@ -33,7 +33,7 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-VERSION = '3.5'
+VERSION = '3.6'
 SEUIL_MIN = 4        # demandes humaines avant d'exiger une synthèse
 SEUIL_REFRESH = 8    # nouvelles demandes depuis la dernière synthèse (ou libération)
 MAX_RELANCES = 3     # blocages consécutifs avant de laisser finir
@@ -156,20 +156,22 @@ def analyser_transcript(chemin: str):
     par Claude Code (last-prompt.leafUuid), dernière demande tapée (une feuille quelconque peut être
     le résultat latéral d'un appel d'outil parallèle) ; ce qui est écrit après l'ancre compte toujours."""
     liens, candidats, avec_origine, ids_prompt, ecrits = {}, [], False, set(), []
+    tete, fin = '', 0
     tapee = assistant = feuille_cc = ''
     try:
         with open(chemin, 'rb') as f:
-            fin = 0
             for brute in f:
                 debut, fin = fin, fin + len(brute)
+                if debut == 0:
+                    tete = hashlib.sha1(brute).hexdigest()[:16] if brute.endswith(b'\n') else ''
                 try:
                     o = json.loads(brute.decode('utf-8', 'replace'))
                 except (ValueError, RecursionError):
                     continue
-                if not isinstance(o, dict):
-                    continue
+                if not isinstance(o, dict) or o.get('isSidechain'):
+                    continue                   # sous-agent : ni demande, ni invite, ni branche
                 uuid = str(o.get('uuid') or '')
-                if uuid and not o.get('isSidechain'):
+                if uuid:
                     liens[uuid] = (str(o.get('parentUuid') or ''), str(o.get('logicalParentUuid') or ''), debut)
                     if o.get('type') == 'assistant':
                         assistant = uuid
@@ -225,7 +227,7 @@ def analyser_transcript(chemin: str):
         if mere and cles:
             herites.setdefault(mere, set()).update(cles)
     return SimpleNamespace(nb=len(positions), positions=positions, unites=unites, liens=liens, active=active,
-                           ancre=ancre, ids_prompt=ids_prompt, ecrits=ecrits, parents={mere: len(c) for mere, c in herites.items()})
+                           ancre=ancre, ids_prompt=ids_prompt, ecrits=ecrits, tete=tete, taille=fin, parents={mere: len(c) for mere, c in herites.items()})
 
 
 def couvertes(a, ancre: str, n: int) -> int:
@@ -263,8 +265,12 @@ def compter(etat: dict, a, avec_attente: bool = True):
     # position lui répond (quels qu'en soient le texte, l'identifiant ou l'origine : un tour
     # planifié écrit ne compte pas comme une demande), le reste est en attente.
     # Une demande dont l'identifiant figure au transcript y est écrite (même sous une autre forme).
+    # Transcript reconstruit depuis (première ligne changée, ou plus court que la position notée) :
+    # la position ne veut plus rien dire, la demande est écartée (elle est relue au transcript).
     notees = sorted((p for p in liste(etat.get('prompts')) if isinstance(p.get('pos'), int)
-                     and not (p.get('id') and p['id'] in a.ids_prompt)), key=lambda p: p['pos'])
+                     and not (p.get('id') and p['id'] in a.ids_prompt)
+                     and p['pos'] <= a.taille and not (p.get('tete') and a.tete and p['tete'] != a.tete)),
+                    key=lambda p: p['pos'])
     attente = 0
     for i, p in enumerate(notees):
         ecrites = sum(1 for x in a.ecrits if x >= p['pos'])
@@ -320,6 +326,16 @@ def sortie(objet: dict) -> None:
     sys.stdout.write(json.dumps(objet, ensure_ascii=False) + '\n')
 
 
+def tete_de(chemin: str) -> str:
+    """Empreinte de la première ligne complète du transcript : ne change que s'il est reconstruit."""
+    try:
+        with open(chemin, 'rb') as f:
+            ligne = f.readline(1 << 20)
+    except OSError:
+        return ''
+    return hashlib.sha1(ligne).hexdigest()[:16] if ligne.endswith(b'\n') else ''
+
+
 def mode_prompt(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     t = str(entree.get('prompt') or '').strip()
     chemin = str(entree.get('transcript_path') or '') or etat.get('transcript') or trouver_transcript(session)
@@ -330,7 +346,8 @@ def mode_prompt(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
             pos = os.path.getsize(chemin) if chemin else 0
         except OSError:
             pos = 0                            # transcript pas encore créé (première demande)
-        etat['prompts'] = [p for p in liste(etat.get('prompts')) if 'pos' in p][-19:] + [{'pos': pos, 'id': str(entree.get('prompt_id') or '')}]
+        etat['prompts'] = [p for p in liste(etat.get('prompts')) if 'pos' in p][-19:] + [
+            {'pos': pos, 'id': str(entree.get('prompt_id') or ''), 'tete': tete_de(chemin) if pos else ''}]
         ecrire_json(f_etat, etat)
     return 0
 
@@ -375,8 +392,9 @@ def mode_debut(session: str, source: str) -> int:
     for s, v in dette.items():
         if not isinstance(v, dict):
             continue
-        if synthese_connue(s) >= entier(v.get('nb'), 0):
-            effacer_dette(s)                 # la synthèse a été faite depuis (tampon ou compte rendu)
+        connue = synthese_connue(s)
+        if connue >= entier(v.get('nb'), 0) and connue > entier(v.get('synthese_vue')):
+            effacer_dette(s)                 # une synthèse a été faite depuis (tampon ou compte rendu)
             continue
         if s == session and source == 'resume':
             dues[s] = v                      # on reprend la discussion qui doit sa synthèse
@@ -395,8 +413,11 @@ def dossier_dettes() -> Path:
 
 
 def noter_dette(session: str, nb: int) -> None:
+    # synthese_vue : la synthèse déjà connue au moment de la dette (un tampon d'avant un /rewind
+    # peut dépasser nb) ; seule une synthèse plus récente l'efface au démarrage.
     ecrire_json(dossier_dettes() / (nom_sur(session) + '.json'),
-                {'session': session, 'nb': nb, 'date': time.strftime('%Y-%m-%d %H:%M'), 't': time.time()})
+                {'session': session, 'nb': nb, 'synthese_vue': synthese_connue(session),
+                 'date': time.strftime('%Y-%m-%d %H:%M'), 't': time.time()})
 
 
 def lire_dettes() -> dict:
@@ -438,8 +459,9 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     # plus récent que l'état (sinon c'est la même synthèse, déjà ramenée).
     brut = max(entier(etat.get('tampon')), entier(etat.get('libere_a')))
     durable = tampon_durable(session)
-    if durable <= max(brut, entier(etat.get('durable_vu'))):
-        durable = -1
+    tampon_actif = couvertes(a, str(etat.get('ancre_tampon') or ''), entier(etat.get('tampon')))
+    if durable <= max(brut, entier(etat.get('durable_vu'))) or tampon_actif < entier(etat.get('tampon')):
+        durable = -1                 # même synthèse que l'état, ou tampon ramené par /rewind : le compte rendu n'y ajoute rien
     elif durable > nb and a.ancre:
         # Compte rendu plus grand que le transcript (fichier reconstruit depuis une compaction) :
         # on repart d'ici, une fois pour toutes, plutôt que de masquer les demandes à venir.
@@ -502,6 +524,37 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
     return 0
 
 
+def premiere_copie(mode: str, entree: dict) -> bool:
+    """Plusieurs copies (utilisateur, dépôt) reçoivent le même événement en parallèle : seule la
+    première à en poser le verrou agit. La clé porte la taille du transcript, qui grandit d'un
+    événement à l'autre : rien ne persiste d'une exécution à la suivante. VM_VERROU=non le coupe."""
+    if os.environ.get('VM_VERROU') == 'non':
+        return True
+    chemin = str(entree.get('transcript_path') or '')
+    try:
+        taille = os.path.getsize(chemin) if chemin else -1
+    except OSError:
+        taille = -1
+    cle = json.dumps([mode, entree.get('session_id'), chemin, taille, entree.get('prompt'), entree.get('source'),
+                      entree.get('stop_hook_active')], ensure_ascii=True, default=str)
+    dossier = dossier_etat() / 'evenements'
+    try:
+        dossier.mkdir(parents=True, exist_ok=True)
+        os.close(os.open(str(dossier / hashlib.sha1(cle.encode('ascii')).hexdigest()[:24]), os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except FileExistsError:
+        return False
+    except OSError:
+        return True                   # verrou impossible : agir quand même (au pire deux fois)
+    try:
+        limite = time.time() - 600
+        for f in dossier.iterdir():
+            if f.stat().st_mtime < limite:
+                f.unlink()
+    except OSError:
+        pass
+    return True
+
+
 def version_de(fichier: Path) -> tuple:
     try:
         m = re.search(r"^VERSION = '([0-9.]+)'", fichier.read_text(encoding='utf-8', errors='replace'), re.M)
@@ -515,7 +568,8 @@ def signaler_version(installee: Path) -> None:
     pousser à réinstaller une version plus ancienne depuis un vieux checkout)."""
     v = version_de(installee)
     if v and v < version_de(Path(__file__)):
-        print(f'Vive mémoire : la copie installée dans {installee.parent} (version {".".join(map(str, v))}) est plus ancienne '
+        quelle = 'antérieure à 3.5' if v == (0,) else '.'.join(map(str, v))
+        print(f'Vive mémoire : la copie installée dans {installee.parent} (version {quelle}) est plus ancienne '
               f'que celle du dépôt ({VERSION}) ; relance « bash {ICI / "installe-mac.sh"} » pour la mettre à jour.')
 
 
@@ -534,23 +588,18 @@ def main() -> int:
     session = str(entree.get('session_id') or '')
     if not session:
         return 0
-    # Une seule copie agit par session. L'enveloppe dit laquelle on est : « utilisateur » (copie
-    # installée dans la config) pose une marque pour la session ; « doublon » (copie d'un dépôt
-    # alors qu'une installation utilisateur est enregistrée) se tait seulement si cette marque
-    # existe : réglages utilisateur illisibles ou non chargés (--setting-sources) = elle agit.
-    copie = os.environ.get('VM_COPIE', '')
-    marque = dossier_etat() / 'actifs' / nom_sur(session)
-    if copie == 'utilisateur':
-        try:
-            marque.parent.mkdir(parents=True, exist_ok=True)
-            marque.touch()
-        except OSError:
-            pass
-    elif copie == 'doublon':
+    # L'enveloppe dit quelle copie on est. « doublon » : copie d'un dépôt alors qu'une installation
+    # utilisateur est enregistrée. Si celle-ci date d'avant le verrou par événement (≤ 3.5), elle
+    # seule agit, comme avant ; sinon, toute copie qui reçoit l'événement passe par le verrou :
+    # réglages utilisateur illisibles ou non chargés (--setting-sources) = la copie du dépôt agit.
+    if os.environ.get('VM_COPIE') == 'doublon':
+        installee = Path(os.environ.get('VM_COPIE_UTILISATEUR') or '')
         if mode == 'debut':
-            signaler_version(Path(os.environ.get('VM_COPIE_UTILISATEUR') or ''))
-        if marque.exists():
+            signaler_version(installee)
+        if (0,) <= version_de(installee) < (3, 6):
             return 0
+    if not premiere_copie(mode, entree):
+        return 0
     if mode == 'debut':
         return mode_debut(session, str(entree.get('source') or ''))
     f_etat = dossier_etat() / (nom_sur(session) + '.json')

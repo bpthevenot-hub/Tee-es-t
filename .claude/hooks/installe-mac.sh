@@ -17,10 +17,13 @@ if [ -n "${CLAUDE_CODE_REMOTE:-}" ]; then
   echo "Session cloud : ~/.claude/settings.json n'y est pas lu, l'installation serait sans effet."; exit 1
 fi
 skill_src=""
-for c in "$ici" "$ici/../skills/vive-memoire" "$ici/../../docs/context/skills/vive-memoire"; do
+# Dépôt (hooks/ + skills/ ou docs/context/skills/) ou copie installée (~/.claude/hooks/vive-memoire + ~/.claude/skills/).
+for c in "$ici" "$ici/../skills/vive-memoire" "$ici/../../docs/context/skills/vive-memoire" "$ici/../../skills/vive-memoire"; do
   if [ -f "$c/SKILL.md" ]; then skill_src="$c"; break; fi
 done
-[ -n "$skill_src" ] || { echo "Skill vive-memoire introuvable à côté de ce script ; rien n'a été installé."; exit 1; }
+if [ -z "$skill_src" ] && [ "${1:-}" != "--retirer" ]; then
+  echo "Skill vive-memoire introuvable à côté de ce script ; rien n'a été installé."; exit 1
+fi
 config="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 cible_hooks="$config/hooks/vive-memoire"
 cible_skill="$config/skills/vive-memoire"
@@ -81,16 +84,17 @@ if mode != '--retirer':
 for evt in EVTS:
     if not h.get(evt, True):
         del h[evt]
-try:
-    octets = (json.dumps(s, ensure_ascii=False, indent=2) + '\n').encode('utf-8')
-except UnicodeEncodeError:       # texte non encodable tel quel (ex. demi-paire \ud800) : échappé
-    octets = (json.dumps(s, ensure_ascii=True, indent=2) + '\n').encode('ascii')
+# Demi-paires (\ud800…) non encodables en UTF-8 : seules elles sont échappées, le reste (nos chemins
+# compris, que l'enveloppe cherche tels quels) reste en clair.
+texte = json.dumps(s, ensure_ascii=False, indent=2) + '\n'
+octets = re.sub('[\ud800-\udfff]', lambda m: '\\u%04x' % ord(m.group()), texte).encode('utf-8')
 cible_fichier = Path(os.path.realpath(reglages))   # lien symbolique (dotfiles) : on écrit sa cible
 fd, tmp = tempfile.mkstemp(dir=str(cible_fichier.parent), prefix='.settings.', suffix='.tmp')
 try:
     with os.fdopen(fd, 'wb') as f:
         f.write(octets)
-    os.chmod(tmp, stat.S_IMODE(os.stat(cible_fichier).st_mode) if cible_fichier.exists() else 0o644)
+    masque = os.umask(0); os.umask(masque)           # fichier neuf : droits selon l'umask, comme avant
+    os.chmod(tmp, stat.S_IMODE(os.stat(cible_fichier).st_mode) if cible_fichier.exists() else 0o666 & ~masque)
     os.replace(tmp, cible_fichier)
 except BaseException:
     os.unlink(tmp)

@@ -2,12 +2,12 @@
 # Enveloppe des hooks « vive mémoire » (Stop, UserPromptSubmit, SessionStart).
 # Usage : bash vive-memoire-stop.sh [stop|prompt|debut]   (défaut : stop)
 # Ne bloque jamais elle-même : seul vive_memoire.py décide, par un JSON sur stdout.
-# Une seule copie agit par session. L'enveloppe dit à vive_memoire.py laquelle elle est :
-#   utilisateur  copie installée dans ~/.claude/hooks/vive-memoire (pose une marque par session)
+# Quand plusieurs copies reçoivent le même événement, une seule agit (verrou par événement,
+# dans vive_memoire.py). L'enveloppe dit à vive_memoire.py laquelle elle est :
+#   utilisateur  copie installée dans ~/.claude/hooks/vive-memoire
 #   doublon      copie d'un dépôt alors qu'une installation utilisateur est enregistrée dans
-#                ~/.claude/settings.json (hors cloud) : elle se tait seulement si la copie
-#                utilisateur a vraiment tourné dans cette session (réglages illisibles ou non
-#                chargés : elle agit)
+#                ~/.claude/settings.json (hors cloud) : si celle-ci est d'avant le verrou
+#                (≤ 3.5), elle seule agit ; sinon le verrou départage
 #   depot        copie d'un dépôt, seule
 mode="${1:-stop}"
 entree=$(cat)
