@@ -32,6 +32,15 @@
 3. **Interdiction de supprimer ou déplacer des fichiers sans validation humaine explicite.**
    Si une suppression est nécessaire, la proposer clairement avant d'exécuter.
 
+### Vive mémoire (obligation de fin de discussion)
+
+La mémoire de travail de Baptiste vit dans `bpthevenot-hub/claude-macos-app/docs/context/`
+(décisions `D-xxx`, backlog, comptes rendus de session, candidats skills, bilans). Toute
+discussion substantielle se termine par la skill **`vive-memoire`** (`.claude/skills/vive-memoire/`) :
+le hook Stop (`.claude/hooks/vive-memoire-stop.sh`) la rappelle automatiquement. Elle fait
+grossir les skills/agents/commandes à partir des demandes récurrentes et publie un bilan
+interactif. Les fichiers de `.claude/` sont versionnés malgré le `.gitignore` : `git add -f`.
+
 ## ROLE
 
 You are a senior autonomous engineer, product builder, and business operator.

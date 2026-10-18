@@ -1,19 +1,15 @@
 name: Robot Commercial - Routines automatiques
 
 on:
-  schedule:
-    # Heures UTC ; l'etape "Determine routine" classe selon l'heure de Paris.
-    # Chaque routine est lancee une fois par creneau (au lieu de toutes les 10
-    # min = 144 appels Opus/jour), ce qui evite les doublons et le coût inutile.
-    # Minutes volontairement hors de l'heure pile : GitHub retarde ou abandonne
-    # plus souvent les crons a HH:00, et une occurrence unique perdue = routine
-    # sautee pour la journee/semaine.
-    # Le matin tourne 7j/7 : la routine ne lit que les 24 dernieres heures, donc
-    # un creneau week-end est necessaire pour ne pas manquer les e-mails recus du
-    # vendredi soir au dimanche. followup/weekly_audit restent en semaine.
-    - cron: '30 5 * * *'     # ~7h30 Paris -> morning (tous les jours)
-    - cron: '17 12 * * 1-5'  # ~14h17 Paris -> followup
-    - cron: '23 15 * * 5'    # ~17h23 Paris vendredi -> weekly_audit
+  # Declenchement planifie DESACTIVE le 2026-10-13 a la demande du proprietaire :
+  # le robot ne tourne plus tout seul. Lancement manuel uniquement (workflow_dispatch).
+  # Pour le reactiver, decommenter le bloc ci-dessous (heures UTC ; l'etape
+  # "Determine routine" classe selon l'heure de Paris ; minutes hors heure pile
+  # car GitHub retarde/abandonne plus souvent les crons a HH:00).
+  # schedule:
+  #   - cron: '30 5 * * 1-5'   # ~7h30 Paris -> morning
+  #   - cron: '17 12 * * 1-5'  # ~14h17 Paris -> followup
+  #   - cron: '23 15 * * 5'    # ~17h23 Paris vendredi -> weekly_audit
   workflow_dispatch:
     inputs:
       routine:

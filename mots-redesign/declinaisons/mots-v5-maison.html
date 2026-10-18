@@ -1,0 +1,1405 @@
+<title>MOTS — Prendre soin des soignants</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="description" content="Proposition de refonte non officielle du site de l’Association MOTS — écoute et accompagnement confidentiels des professionnels de santé en difficulté.">
+<style>
+/* =========================================================
+   MOTS — déclinaison « Maison »
+   Ivoire, encre, filet or. Toutes les couleurs passent par
+   les tokens ci-dessous ; le thème sombre ne redéfinit que
+   des tokens.
+   ========================================================= */
+:root {
+  --fond: #f6f1e6;
+  --papier: #fcf9f2;
+  --encre: #1f1b16;
+  --encre-2: #4a4339;
+  --encre-3: #6a6152;
+  --or: #b08d43;
+  --or-texte: #7a5b1f;
+  --or-appel: #8a6516;
+  --filet: rgba(176, 141, 67, .62);
+  --filet-doux: rgba(176, 141, 67, .32);
+  --trait: rgba(31, 27, 22, .14);
+  --bouton-fond: #1f1b16;
+  --bouton-texte: #f6f1e6;
+  --bandeau-fond: #1f1b16;
+  --bandeau-texte: #efe7d6;
+  --bandeau-lien: #e2c27f;
+  --focus: #1f1b16;
+  --focus-halo: #fcf9f2;
+  --serif: Baskerville, 'Baskerville Old Face', 'Palatino Linotype', Palatino, Georgia, serif;
+  --t-label: .78rem;
+  --t-petit: .9375rem;
+  --t-corps: 1.09rem;
+  --t-chapo: 1.1875rem;
+  --t-intertitre: 1.375rem;
+  --t-titre: clamp(1.75rem, 1.2rem + 2.2vw, 2.5rem);
+  --t-grand: clamp(2.15rem, 1.4rem + 3.4vw, 3.4rem);
+  --t-chiffre: clamp(3.25rem, 2rem + 6vw, 6rem);
+  --mesure: 65ch;
+  --large: 72rem;
+  --gouttiere: clamp(1rem, 4vw, 3rem);
+  --duree: 0s;
+  --hb: 3.25rem;
+  color-scheme: light;
+}
+@media (prefers-reduced-motion: no-preference) {
+  :root { --duree: .5s; }
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --fond: #0f1218;
+    --papier: #161a22;
+    --encre: #ece4d3;
+    --encre-2: #cbc1ae;
+    --encre-3: #a99f8c;
+    --or: #c4a35e;
+    --or-texte: #d9ba76;
+  --or-appel: #c4a35e;
+    --filet: rgba(196, 163, 94, .6);
+    --filet-doux: rgba(196, 163, 94, .3);
+    --trait: rgba(236, 228, 211, .16);
+    --bouton-fond: #ece4d3;
+    --bouton-texte: #0f1218;
+    --bandeau-fond: #07090d;
+    --bandeau-texte: #ece4d3;
+    --bandeau-lien: #e2c27f;
+    --focus: #f0d48f;
+    --focus-halo: #0f1218;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --fond: #0f1218;
+  --papier: #161a22;
+  --encre: #ece4d3;
+  --encre-2: #cbc1ae;
+  --encre-3: #a99f8c;
+  --or: #c4a35e;
+  --or-texte: #d9ba76;
+  --or-appel: #c4a35e;
+  --filet: rgba(196, 163, 94, .6);
+  --filet-doux: rgba(196, 163, 94, .3);
+  --trait: rgba(236, 228, 211, .16);
+  --bouton-fond: #ece4d3;
+  --bouton-texte: #0f1218;
+  --bandeau-fond: #07090d;
+  --bandeau-texte: #ece4d3;
+  --bandeau-lien: #e2c27f;
+  --focus: #f0d48f;
+  --focus-halo: #0f1218;
+  color-scheme: dark;
+}
+:root[data-theme="light"] { color-scheme: light; }
+
+/* ---------- Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: calc(var(--hb) + 1rem); scroll-padding-bottom: 1rem; }
+body {
+  margin: 0;
+  background: var(--fond);
+  color: var(--encre);
+  font-family: var(--serif);
+  font-size: var(--t-corps);
+  line-height: 1.62;
+  overflow-wrap: break-word;
+  font-kerning: normal;
+}
+h1, h2, h3, h4 { font-weight: 400; line-height: 1.16; margin: 0; text-wrap: balance; letter-spacing: .005em; }
+h1 { font-size: var(--t-grand); }
+h2 { font-size: var(--t-titre); }
+h3 { font-size: var(--t-intertitre); }
+p { margin: 0; max-width: var(--mesure); }
+p + p { margin-top: .9em; }
+ul, ol { margin: 0; padding: 0; }
+a { color: var(--encre); text-decoration-line: underline; text-decoration-color: var(--or); text-decoration-thickness: 1px; text-underline-offset: .22em; }
+a:hover { text-decoration-thickness: 2px; }
+i, cite, em { font-style: italic; }
+cite { font-style: italic; }
+svg { display: block; }
+[hidden] { display: none !important; }
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 3px var(--focus-halo);
+}
+[tabindex="-1"]:focus { outline: none; box-shadow: none; }
+/* Liens dans le texte courant : soulignement or épaissi + anneau serré, sans halo (ne mord pas sur les mots voisins) */
+.portail-recours a:focus-visible, .sortie a:focus-visible, .source a:focus-visible,
+.urgence-pied a:focus-visible, .notes a:focus-visible, .entete-tel a:focus-visible,
+.appel a:focus-visible, .appel-texte a:focus-visible, .citation-mention a:focus-visible {
+  outline: 1.5px solid var(--focus); outline-offset: 1px; box-shadow: none;
+  text-decoration-line: underline; text-decoration-color: var(--or); text-decoration-thickness: 3px;
+}
+[id] { scroll-margin-top: calc(var(--hb) + 1.25rem); }
+.num { font-variant-numeric: lining-nums tabular-nums; white-space: nowrap; }
+.visuellement-cache {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---------- Bandeau démo (toujours visible) ---------- */
+.bandeau {
+  position: sticky; top: 0; z-index: 60;
+  background: var(--bandeau-fond); color: var(--bandeau-texte);
+  border-bottom: 1px solid var(--or);
+  padding: .55rem var(--gouttiere);
+  font-size: .8125rem; line-height: 1.45; letter-spacing: .02em;
+  text-align: center;
+}
+.bandeau p { max-width: none; }
+.bandeau a { color: var(--bandeau-lien); }
+.bandeau a:focus-visible { outline-color: var(--bandeau-lien); box-shadow: 0 0 0 3px var(--bandeau-fond); }
+
+.evitement {
+  position: absolute; left: var(--gouttiere); top: calc(var(--hb) + .5rem); z-index: 70;
+  background: var(--papier); color: var(--encre); padding: .6rem 1rem;
+  border: 1px solid var(--or); transform: translateY(-300%);
+}
+.evitement:focus { transform: none; }
+
+/* ---------- Ornements ---------- */
+.monogramme { width: 4rem; height: 4rem; color: var(--encre); margin-inline: auto; }
+.monogramme .anneau { fill: none; stroke: var(--or); }
+.monogramme text { fill: currentColor; font-family: var(--serif); }
+.double-filet {
+  height: 4px; border: 0; border-top: 1px solid var(--filet); border-bottom: 1px solid var(--filet);
+  margin: 0;
+}
+.fleuron {
+  display: flex; align-items: center; gap: .9rem; justify-content: center;
+  margin-inline: auto; max-width: 18rem; color: var(--or);
+}
+.fleuron::before, .fleuron::after { content: ""; flex: 1; border-top: 1px solid var(--filet); }
+.fleuron span { width: .45rem; height: .45rem; border: 1px solid var(--or); transform: rotate(45deg); }
+.surtitre {
+  font-size: var(--t-label); text-transform: uppercase; letter-spacing: .26em;
+  color: var(--or-texte); margin: 0 0 .9rem;
+}
+.cap { font-variant-caps: all-small-caps; letter-spacing: .14em; }
+
+/* ---------- Boutons ---------- */
+.actions { display: flex; flex-wrap: wrap; gap: .9rem 1rem; margin-top: 1.9rem; align-items: center; }
+.actions-centre { justify-content: center; }
+.bouton {
+  display: inline-flex; align-items: center; justify-content: center; gap: .6rem;
+  min-height: 3rem; padding: .7rem 1.6rem;
+  font: inherit; font-size: 1.08rem; font-variant-caps: all-small-caps; letter-spacing: .16em;
+  background: var(--bouton-fond); color: var(--bouton-texte);
+  border: 1px solid var(--bouton-fond); border-radius: 0;
+  box-shadow: inset 0 0 0 3px var(--bouton-fond), inset 0 0 0 4px var(--or);
+  text-decoration: none; cursor: pointer; text-align: center;
+  transition: background-color var(--duree), box-shadow var(--duree);
+}
+/* Survol : le fond reste à l'encre, seul le filet or intérieur s'affirme (1px → 2px) */
+.bouton:hover { box-shadow: inset 0 0 0 3px var(--bouton-fond), inset 0 0 0 5px var(--or); }
+.bouton:focus-visible { box-shadow: inset 0 0 0 3px var(--bouton-fond), inset 0 0 0 4px var(--or), 0 0 0 3px var(--focus-halo); }
+.bouton:hover:focus-visible { box-shadow: inset 0 0 0 3px var(--bouton-fond), inset 0 0 0 5px var(--or), 0 0 0 3px var(--focus-halo); }
+.bouton-filet {
+  background: transparent; color: var(--encre);
+  border: 1px solid var(--or); box-shadow: none;
+}
+.bouton-filet:hover { background: var(--papier); box-shadow: none; }
+.bouton-filet:hover:focus-visible { box-shadow: 0 0 0 3px var(--focus-halo); }
+.bouton-filet:focus-visible { box-shadow: 0 0 0 3px var(--focus-halo); }
+.bouton .num { letter-spacing: .08em; font-variant-caps: normal; }
+.lien-suite { font-variant-caps: all-small-caps; letter-spacing: .14em; font-size: 1.05rem; }
+
+/* ---------- Portail : carton d'invitation ---------- */
+#portail {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; overflow-y: auto;
+  padding: calc(var(--hb) + 1.25rem) 1rem 1.25rem;
+  background: var(--fond);
+  opacity: 1; visibility: visible;
+  transition: opacity var(--duree), visibility 0s linear 0s;
+}
+#portail.ferme { opacity: 0; visibility: hidden; transition: opacity var(--duree), visibility 0s linear var(--duree); }
+.carton {
+  margin: auto; width: 100%; max-width: 34rem;
+  border: 1px solid var(--or); padding: 7px; background: var(--papier);
+}
+.carton-cadre {
+  border: 1px solid var(--filet); padding: clamp(1.5rem, 5vw, 2.75rem) clamp(1.1rem, 5vw, 2.75rem);
+  text-align: center; display: flex; flex-direction: column; align-items: center; gap: clamp(.5rem, 1.4vh, .9rem);
+}
+.carton-cadre p { margin: 0; }
+.passer {
+  align-self: flex-end; margin: -.4rem -.3rem 0 0;
+  font: inherit; font-size: .95rem; font-variant-caps: all-small-caps; letter-spacing: .14em;
+  background: none; border: 0; color: var(--encre-2); padding: .4rem .3rem; cursor: pointer;
+  text-decoration: underline; text-decoration-color: var(--filet); text-underline-offset: .25em;
+}
+.portail-asso { font-size: var(--t-label); text-transform: uppercase; letter-spacing: .42em; padding-left: .42em; color: var(--or-texte); }
+.portail-devise { font-size: clamp(1.6rem, 1.2rem + 1.8vw, 2.25rem); font-style: italic; }
+.portail-chiffre { font-size: clamp(3.5rem, 2.4rem + 5vw, 5.25rem); line-height: 1; font-variant-numeric: lining-nums tabular-nums; }
+.portail-enonce { color: var(--encre-2); max-width: 26rem; }
+.portail-source { font-size: var(--t-petit); color: var(--encre-3); }
+.portail-ligne { font-size: var(--t-label); text-transform: uppercase; letter-spacing: .24em; color: var(--or-texte); }
+.numero-souligne {
+  font-size: clamp(1.6rem, 1.3rem + 1.4vw, 2.1rem); letter-spacing: .08em; text-decoration: none;
+  font-variant-numeric: lining-nums tabular-nums; white-space: nowrap;
+  border-bottom: 1px solid var(--or); box-shadow: 0 3px 0 -2px var(--or); padding: 0 .2rem .15rem;
+}
+.numero-souligne:hover { border-bottom-width: 2px; }
+.portail-recours { font-size: var(--t-petit); color: var(--encre-2); max-width: 24rem; }
+.carton-cadre .fleuron { width: 100%; max-width: 12rem; }
+
+/* ---------- En-tête : papier à lettres ---------- */
+.entete { text-align: center; padding: clamp(1.75rem, 4vw, 3rem) var(--gouttiere) 0; }
+.entete-marque { display: inline-block; text-decoration: none; color: inherit; }
+.entete-asso { font-size: var(--t-label); text-transform: uppercase; letter-spacing: .42em; padding-left: .42em; color: var(--or-texte); margin: .9rem auto .3rem; max-width: none; }
+.entete-marque p + p { margin-top: 0; }
+.entete-nom { font-size: clamp(2.5rem, 1.6rem + 4vw, 4.25rem); letter-spacing: .34em; padding-left: .34em; line-height: 1; max-width: none; }
+.entete-devise { font-style: italic; color: var(--encre-2); margin: .75rem auto 1.4rem; font-size: 1.125rem; }
+.entete .double-filet { max-width: var(--large); margin-inline: auto; }
+.nav ul { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: .2rem 1.5rem; padding: .85rem 0; }
+.nav a {
+  display: inline-block; padding: .35rem .1rem;
+  font-variant-caps: all-small-caps; letter-spacing: .14em; font-size: 1.08rem;
+  color: var(--encre-2); text-decoration: none; border-bottom: 1px solid transparent;
+}
+.nav a:hover { color: var(--encre); border-bottom-color: var(--filet-doux); }
+.nav a[aria-current="page"] { color: var(--encre); border-bottom-color: var(--or); }
+.entete-tel {
+  max-width: var(--large); margin-inline: auto; border-top: 1px solid var(--filet-doux);
+  display: flex; flex-wrap: wrap; justify-content: center; gap: .2rem .9rem;
+  padding: .7rem 0 .8rem; font-size: var(--t-petit); color: var(--encre-3);
+}
+.entete-tel a { color: var(--encre); letter-spacing: .06em; }
+.entete-tel .sep { color: var(--or); }
+
+/* ---------- Mise en page ---------- */
+main { display: block; }
+.vue { padding-top: clamp(2.5rem, 6vw, 4.5rem); }
+.cadre { max-width: var(--large); margin-inline: auto; padding-inline: var(--gouttiere); }
+.rubrique { padding-block: clamp(3rem, 7vw, 5.5rem); }
+.rubrique + .rubrique { border-top: 1px solid var(--trait); }
+.tete-rubrique { margin-bottom: clamp(2rem, 4vw, 3rem); }
+.tete-rubrique p:not(.surtitre) { margin-top: 1rem; color: var(--encre-2); }
+.tete-centree { text-align: center; }
+.tete-centree p, .entete-page p, .carton-large p { margin-inline: auto; }
+.chapo { font-size: var(--t-chapo); color: var(--encre-2); }
+.entete-page { text-align: center; padding-bottom: clamp(2rem, 4vw, 3rem); }
+.entete-page h1 { max-width: 22ch; margin-inline: auto; }
+.entete-page .chapo { margin: 1.25rem auto 0; max-width: 46rem; }
+.entete-page .fleuron { margin-top: 2rem; }
+
+/* ---------- Héro accueil ---------- */
+.hero { display: grid; gap: clamp(2.25rem, 5vw, 3.5rem); justify-items: center; text-align: center; padding-bottom: clamp(3rem, 6vw, 4.5rem); }
+.hero-texte { display: grid; justify-items: center; }
+.hero h1 { max-width: 21ch; margin-inline: auto; }
+.hero .chapo { margin: 1.25rem auto 0; max-width: 44rem; }
+.hero .actions { justify-content: center; margin-top: 1.6rem; }
+.hero-note { margin: 1rem auto 0; font-size: var(--t-petit); color: var(--encre-3); font-style: italic; }
+.carte-appel { border: 1px solid var(--or); padding: 7px; background: var(--papier); width: 100%; max-width: 30rem; }
+.carte-appel > div { border: 1px solid var(--filet-doux); padding: clamp(1.5rem, 4vw, 2.25rem) 1.25rem; text-align: center; display: grid; gap: .85rem; justify-items: center; }
+.carte-appel p { margin: 0; }
+.carte-appel .mentions-ligne { font-size: var(--t-petit); color: var(--encre-2); }
+
+/* ---------- Registre (chiffres associatifs) ---------- */
+.registre { list-style: none; display: grid; grid-template-columns: minmax(0, 1fr); border-block: 1px solid var(--filet); padding-block: .4rem; }
+.registre li { position: relative; text-align: center; padding: 1.1rem .5rem; display: grid; gap: .25rem; align-content: start; }
+.registre li + li::before {
+  content: ""; position: absolute; top: 0; left: 50%; width: .42rem; height: .42rem;
+  border: 1px solid var(--or); background: var(--fond); transform: translate(-50%, -50%) rotate(45deg);
+}
+@media (min-width: 48rem) {
+  .registre { grid-template-columns: repeat(4, minmax(0, 1fr)); padding-block: .6rem; }
+  .registre li + li::before { top: 50%; left: 0; }
+}
+.registre .valeur { font-size: clamp(2rem, 1.5rem + 2vw, 2.75rem); line-height: 1.05; font-variant-numeric: lining-nums tabular-nums; }
+.registre .libelle { font-variant-caps: all-small-caps; letter-spacing: .12em; color: var(--encre-2); font-size: 1rem; text-wrap: balance; }
+
+/* ---------- Science : citations gravées ---------- */
+.gravures { list-style: none; display: grid; gap: 0; }
+.gravure { padding: 1.75rem 0; display: grid; gap: .8rem; align-content: start; }
+.gravure + .gravure { border-top: 1px solid var(--filet-doux); }
+@media (min-width: 60rem) {
+  .gravures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .gravure { padding: .5rem 2rem; }
+  .gravure:first-child { padding-left: 0; }
+  .gravure:last-child { padding-right: 0; }
+  .gravure + .gravure { border-top: 0; border-left: 1px solid var(--filet-doux); }
+}
+.chiffre { font-size: var(--t-chiffre); line-height: .95; font-variant-numeric: lining-nums tabular-nums; letter-spacing: -.01em; white-space: nowrap; margin: 0; }
+.appel { font-size: .36em; vertical-align: .9em; line-height: 0; margin-left: .12em; letter-spacing: 0; }
+.appel a { color: var(--or-appel); text-decoration: none; padding: 0 .12em; }
+.appel a:hover { text-decoration: underline; }
+.appel-texte { font-size: .7em; vertical-align: super; line-height: 0; }
+.appel-texte a { color: var(--or-appel); text-decoration: none; padding: 0 .1em; }
+.gravure p:not(.chiffre) { color: var(--encre-2); }
+.gravure .chiffre {
+  font-size: clamp(3.25rem, 2rem + 4.2vw, 5.25rem);
+  padding-bottom: .55rem;
+  background: linear-gradient(var(--or), var(--or)) left bottom / 2.5rem 1px no-repeat;
+}
+/* Empilées (mobile, tablette) : la gravure reprend l'axe central de la maison */
+@media (max-width: 59.99rem) {
+  .gravure { text-align: center; justify-items: center; }
+  .gravure p { margin-inline: auto; }
+  .gravure .chiffre { background-position: center bottom; }
+}
+.sortie {
+  margin: 2.25rem auto 0; max-width: 46rem; text-align: center; font-style: italic; color: var(--encre-2);
+  padding: 1rem 0; border-block: 1px solid var(--filet-doux);
+}
+.sortie a { font-style: normal; white-space: nowrap; }
+.citation { margin: clamp(2.5rem, 5vw, 3.5rem) auto 0; max-width: 44rem; text-align: center; }
+.citation .surtitre { margin-bottom: 1.1rem; }
+.citation .citation-titre { margin: 0 auto; font-size: var(--t-titre); line-height: 1.2; text-wrap: balance; }
+.citation .citation-texte { margin: 1rem auto 0; font-size: clamp(1.25rem, 1.05rem + .9vw, 1.6rem); line-height: 1.42; font-style: italic; color: var(--encre-2); text-wrap: balance; max-width: 40rem; }
+.citation .citation-mention { margin: 1rem auto 0; font-size: var(--t-petit); color: var(--encre-3); }
+.notes {
+  margin-top: clamp(2.5rem, 5vw, 3.5rem); padding: 1.25rem 0 0 1.4rem;
+  border-top: 1px solid var(--filet); font-size: var(--t-petit); color: var(--encre-2);
+  display: grid; gap: .55rem;
+}
+.notes li { max-width: 80ch; padding-left: .3rem; }
+.notes li::marker { color: var(--or-texte); font-variant-numeric: lining-nums; }
+.notes a { white-space: nowrap; }
+.renvoi { margin-top: 2rem; text-align: center; }
+.renvoi p { margin-inline: auto; }
+
+/* ---------- Planches (/science) ---------- */
+.planche {
+  display: grid; gap: 1.25rem; justify-items: center; text-align: center;
+  max-width: 46rem; margin-inline: auto; padding-block: clamp(2.5rem, 5vw, 3.75rem);
+}
+.planche + .planche { border-top: 1px solid var(--trait); }
+.planche p { margin-inline: auto; }
+.planche-tete { display: grid; gap: .75rem; justify-items: center; }
+.planche-num { font-variant-caps: all-small-caps; letter-spacing: .22em; color: var(--or-texte); font-size: 1.1rem; }
+.planche-corps { display: grid; gap: 1rem; justify-items: center; width: 100%; }
+.planche-corps h2 { font-size: var(--t-intertitre); }
+.planche-corps .enonce { font-size: var(--t-chapo); }
+.detail { list-style: none; display: grid; gap: .35rem; color: var(--encre-2); width: 100%; max-width: 30rem; text-align: left; }
+.detail li { display: flex; gap: .9rem; align-items: baseline; border-bottom: 1px solid var(--trait); padding: .4rem 0; max-width: var(--mesure); }
+.detail .num { min-width: 4.2rem; color: var(--encre); font-size: 1.15rem; }
+/* Gabarit unique pour les quatre planches : intitulé or au-dessus, méthode centrée dessous */
+.methode { font-size: var(--t-petit); color: var(--encre-2); display: grid; justify-items: center; gap: .3rem; }
+.methode b { font-weight: 400; font-size: var(--t-label); text-transform: uppercase; letter-spacing: .26em; color: var(--or-texte); }
+.source { font-size: var(--t-petit); color: var(--encre-2); }
+.planche-filet { border: 0; border-top: 1px solid var(--or); width: 4rem; margin: .25rem auto; }
+/* Citation gravée (étude The Lancet, sans chiffre) : grands guillemets or suspendus */
+.guillemets { position: relative; font-style: italic; text-wrap: balance;padding-inline: clamp(2rem, 1.4rem + 2.6vw, 3.25rem); }
+.guillemets::before, .guillemets::after {
+  position: absolute; font-style: normal; font-size: clamp(2.75rem, 2.2rem + 2.2vw, 3.9rem);
+  line-height: 1; color: var(--or); pointer-events: none;
+}
+.guillemets::before { content: "\00AB"; content: "\00AB" / ""; left: 0; top: -.14em; }
+.guillemets::after { content: "\00BB"; content: "\00BB" / ""; right: 0; bottom: -.1em; }
+.citation .citation-texte.guillemets { max-width: 36rem; }
+/* Petit écran : guillemets dans le fil du texte plutôt qu'en marge */
+@media (max-width: 30rem) {
+  .guillemets { padding-inline: 0; }
+  .guillemets::before, .guillemets::after { position: static; font-size: 1.5em; line-height: 0; vertical-align: -.12em; }
+  .guillemets::before { margin-right: .18em; }
+  .guillemets::after { margin-left: .18em; }
+}
+.planche .intitule-planche { margin: 0 auto; font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.4rem); line-height: 1.2; text-wrap: balance; max-width: 18ch; }
+
+/* ---------- Parcours I / II / III ---------- */
+.parcours { list-style: none; display: grid; gap: 2.5rem 2.5rem; }
+@media (min-width: 52rem) { .parcours { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.parcours li { text-align: center; display: grid; gap: .8rem; justify-items: center; align-content: start; }
+.parcours p { color: var(--encre-2); }
+.anneau {
+  width: 4.5rem; height: 4.5rem; border-radius: 50%;
+  border: 1px solid var(--or); box-shadow: 0 0 0 4px var(--fond), 0 0 0 5px var(--filet);
+  display: grid; place-items: center; margin-bottom: .6rem;
+  font-size: 1.45rem; letter-spacing: .06em; color: var(--encre);
+}
+.parcours-detail li { text-align: left; justify-items: start; }
+@media (min-width: 52rem) { .parcours-detail li { text-align: center; justify-items: center; } }
+.parcours-detail .precision { font-size: var(--t-petit); color: var(--encre-3); }
+
+/* ---------- Listes à filets ---------- */
+.filets { list-style: none; display: grid; gap: 1.75rem 2.5rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.filets li { border-top: 1px solid var(--filet); padding-top: 1rem; display: grid; gap: .45rem; align-content: start; }
+.filets h3 { font-size: 1.2rem; }
+.filets p { color: var(--encre-2); font-size: 1.03rem; }
+
+/* ---------- Professions ---------- */
+.professions { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); border-top: 1px solid var(--filet); }
+.professions li {
+  text-align: center; padding: .9rem .5rem; border-bottom: 1px solid var(--filet-doux);
+  font-variant-caps: all-small-caps; letter-spacing: .1em; font-size: 1.12rem;
+}
+.professions-note { margin: 1.75rem auto 0; text-align: center; color: var(--encre-2); }
+
+/* ---------- Encadré urgence ---------- */
+.urgence {
+  border: 1px solid var(--encre); padding: 6px; background: var(--papier);
+  max-width: 50rem; margin-inline: auto;
+}
+.urgence > div { border: 1px solid var(--filet); padding: 1.25rem clamp(1rem, 3vw, 1.75rem); display: grid; gap: .75rem; }
+.urgence-titre { font-size: var(--t-label); text-transform: uppercase; letter-spacing: .26em; color: var(--or-texte); margin: 0; }
+.urgence-ligne { display: flex; flex-wrap: wrap; gap: .5rem 1.4rem; align-items: center; }
+.urgence-num { font-size: clamp(2.25rem, 1.8rem + 2vw, 3rem); line-height: 1; text-decoration: none; letter-spacing: .06em; font-variant-numeric: lining-nums tabular-nums; border-bottom: 1px solid var(--or); padding-bottom: .1rem; }
+.urgence-ligne p { flex: 1 1 18rem; margin: 0; }
+.urgence-pied { font-size: var(--t-petit); color: var(--encre-2); border-top: 1px solid var(--filet-doux); padding-top: .7rem; max-width: none; }
+.urgence-pied a { white-space: nowrap; }
+.urgence + .rubrique, .bloc-urgence { margin-top: 0; }
+.bloc-urgence { padding-bottom: clamp(2.5rem, 5vw, 3.5rem); }
+
+/* ---------- Carton large (mécénat, appels) ---------- */
+.carton-large { border: 1px solid var(--or); padding: 7px; background: var(--papier); }
+.carton-large > div { border: 1px solid var(--filet-doux); padding: clamp(2rem, 5vw, 3.5rem) clamp(1.1rem, 4vw, 3rem); text-align: center; }
+.carton-large h2 { max-width: 24ch; margin-inline: auto; }
+.carton-large p:not(.surtitre) { margin: 1.1rem auto 0; color: var(--encre-2); }
+
+/* ---------- Deux colonnes éditoriales ---------- */
+.deux-colonnes { display: grid; gap: 2rem 4rem; }
+@media (min-width: 56rem) { .deux-colonnes { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+
+/* ---------- FAQ ---------- */
+.faq { max-width: 52rem; margin-inline: auto; border-top: 1px solid var(--filet); }
+.faq details { border-bottom: 1px solid var(--filet-doux); }
+.faq summary {
+  list-style: none; cursor: pointer; display: flex; justify-content: space-between; gap: 1.25rem; align-items: baseline;
+  padding: 1.15rem .1rem; font-size: 1.2rem;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; color: var(--or-texte); font-size: 1.4rem; line-height: 1; flex: none; }
+.faq details[open] summary::after { content: "\2212"; }
+.faq details > div { padding: 0 .1rem 1.4rem; color: var(--encre-2); }
+
+/* ---------- Formulaire ---------- */
+.formulaire { display: grid; gap: 1.15rem; }
+.champ { display: grid; gap: .4rem; }
+.champ label { font-variant-caps: all-small-caps; letter-spacing: .14em; font-size: 1.02rem; color: var(--encre-2); }
+.champ input, .champ select, .champ textarea {
+  font: inherit; font-size: 1rem; color: var(--encre); background: var(--papier);
+  border: 1px solid var(--encre-3); border-radius: 0; padding: .7rem .8rem; width: 100%; min-width: 0;
+}
+.champ textarea { min-height: 9rem; resize: vertical; }
+.statut { font-size: var(--t-petit); color: var(--encre-2); font-style: italic; min-height: 1.5em; }
+.adresse { font-style: normal; line-height: 1.7; }
+.colonne-coord { display: grid; gap: 2rem; align-content: start; }
+.colonne-coord h2, .colonne-form h2 { font-size: var(--t-intertitre); margin-bottom: .8rem; }
+
+/* ---------- Mentions ---------- */
+.mentions { max-width: 52rem; margin-inline: auto; display: grid; gap: 2.5rem; }
+.mentions section { display: grid; gap: .8rem; }
+.mentions h2 { font-size: var(--t-intertitre); padding-bottom: .6rem; border-bottom: 1px solid var(--filet-doux); }
+.mentions h3 { font-size: 1.1rem; font-variant-caps: all-small-caps; letter-spacing: .12em; color: var(--or-texte); margin-top: .4rem; }
+.mentions p { color: var(--encre-2); }
+
+/* ---------- Pied de page ---------- */
+.pied { margin-top: clamp(3rem, 6vw, 5rem); background: var(--papier); border-top: 1px solid var(--trait); }
+.pied .double-filet { max-width: none; }
+.pied-haut { padding-block: clamp(2.5rem, 5vw, 3.5rem); display: grid; gap: 2.5rem; }
+@media (min-width: 56rem) { .pied-haut { grid-template-columns: 1.2fr 1fr 1fr; } }
+.pied-marque { display: grid; gap: .6rem; justify-items: start; }
+.pied-marque .monogramme { width: 3rem; height: 3rem; margin: 0; }
+.pied-nom { font-size: 1.6rem; letter-spacing: .34em; }
+.pied-devise { font-style: italic; color: var(--encre-2); }
+.pied h2 { font-size: var(--t-label); text-transform: uppercase; letter-spacing: .26em; color: var(--or-texte); margin-bottom: .9rem; }
+.pied-liens { list-style: none; display: grid; gap: .35rem; }
+.pied-liens a { text-decoration: none; }
+.pied-liens a:hover { text-decoration: underline; }
+.pied-bas {
+  border-top: 1px solid var(--filet-doux); padding-block: 1.25rem 1.75rem;
+  display: flex; flex-wrap: wrap; gap: .75rem 2rem; justify-content: space-between; align-items: center;
+  font-size: .875rem; color: var(--encre-3);
+}
+.pied-bas p { max-width: 60ch; }
+.bascule {
+  font: inherit; font-size: .95rem; font-variant-caps: all-small-caps; letter-spacing: .12em;
+  background: none; color: var(--encre-2); border: 1px solid var(--filet); padding: .45rem .9rem; cursor: pointer; border-radius: 0;
+}
+.bascule:hover { color: var(--encre); }
+
+/* Pied de page empilé : papier à lettres centré, blocs séparés par des filets */
+@media (max-width: 55.99rem) {
+  .pied-haut { text-align: center; gap: 0; }
+  .pied-haut > * + * { border-top: 1px solid var(--filet-doux); padding-top: 1.75rem; margin-top: 1.75rem; }
+  .pied-marque { justify-items: center; }
+  .pied-marque .monogramme { margin-inline: auto; }
+  .pied-nom { padding-left: .34em; }
+  .pied-haut p { margin-inline: auto; }
+  .pied-liens a { font-variant-caps: all-small-caps; letter-spacing: .12em; font-size: 1.08rem; }
+  .pied-bas { justify-content: center; text-align: center; }
+}
+
+/* Pages qui portent déjà leur encadré d'urgence : celui du pied se réduit à une ligne sous filet */
+#site:has(.vue:not([hidden]) .urgence) .pied .urgence { border: 0; padding: 0; background: none; }
+#site:has(.vue:not([hidden]) .urgence) .pied .urgence > div {
+  border: 0; border-top: 1px solid var(--filet-doux); padding: 1rem 0 0;
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: baseline; gap: .25rem .8rem; text-align: center;
+}
+#site:has(.vue:not([hidden]) .urgence) .pied .urgence-ligne { display: contents; }
+#site:has(.vue:not([hidden]) .urgence) .pied .urgence-num { font-size: 1.25rem; padding-bottom: 0; }
+#site:has(.vue:not([hidden]) .urgence) .pied .urgence-ligne p { flex: 0 1 auto; max-width: none; font-size: var(--t-petit); color: var(--encre-2); }
+
+/* Intitulés en capitales espacées : interlettrage resserré et coupure équilibrée sur petit écran */
+.surtitre, .portail-ligne, .urgence-titre { text-wrap: balance; }
+@media (max-width: 30rem) {
+  .surtitre, .portail-ligne, .urgence-titre, .pied h2 { letter-spacing: .18em; }
+}
+</style>
+
+<div class="bandeau" id="bandeau">
+  <p>Proposition de refonte — démonstration non officielle, non affiliée à l’Association MOTS. Site officiel&nbsp;: <a href="https://www.association-mots.org" target="_blank" rel="noopener">association-mots.org</a></p>
+</div>
+<a class="evitement" href="#contenu">Aller au contenu</a>
+
+<!-- ================= PORTAIL ================= -->
+<div id="portail" role="dialog" aria-modal="true" aria-labelledby="portail-titre" aria-describedby="portail-desc">
+  <div class="carton">
+    <div class="carton-cadre">
+      <button type="button" class="passer" data-entrer>Passer l’introduction</button>
+      <svg class="monogramme" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+        <circle class="anneau" cx="50" cy="50" r="46" stroke-width="1.2"/>
+        <circle class="anneau" cx="50" cy="50" r="41" stroke-width=".6"/>
+        <text x="50" y="64" text-anchor="middle" font-size="42">M</text>
+      </svg>
+      <p class="portail-asso">Association MOTS</p>
+      <h1 id="portail-titre" class="portail-devise">Prendre soin des soignants</h1>
+      <div class="fleuron" aria-hidden="true"><span></span></div>
+      <p class="portail-chiffre num">1&nbsp;700+</p>
+      <p class="portail-enonce" id="portail-desc">soignants accompagnés par l’association depuis sa création, en 2010.</p>
+      <p class="portail-source">Médecin · Organisation · Travail · Santé</p>
+      <div class="fleuron" aria-hidden="true"><span></span></div>
+      <p class="portail-ligne">Ligne d’écoute des soignants&nbsp;·&nbsp;7&nbsp;j/7</p>
+      <p><a class="numero-souligne" href="tel:+33608282589">06 08 28 25 89</a></p>
+      <p class="portail-recours">Confidentielle et gratuite. Si des idées suicidaires vous traversent, le <a href="tel:3114">3114</a> répond aussi, 24&nbsp;h/24.</p>
+      <button type="button" class="bouton" id="portail-entrer" data-entrer>Entrer dans le site</button>
+    </div>
+  </div>
+</div>
+
+<div id="site">
+<!-- ================= EN-TÊTE ================= -->
+<header class="entete">
+  <a class="entete-marque" href="/" aria-label="Association MOTS — accueil">
+    <svg class="monogramme" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+      <circle class="anneau" cx="50" cy="50" r="46" stroke-width="1.2"/>
+      <circle class="anneau" cx="50" cy="50" r="41" stroke-width=".6"/>
+      <text x="50" y="64" text-anchor="middle" font-size="42">M</text>
+    </svg>
+    <p class="entete-asso" aria-hidden="true">Association</p>
+    <p class="entete-nom" aria-hidden="true">MOTS</p>
+  </a>
+  <p class="entete-devise">Prendre soin des soignants</p>
+  <hr class="double-filet">
+  <nav class="nav" aria-label="Navigation principale">
+    <ul>
+      <li><a href="/" data-nav>Accueil</a></li>
+      <li><a href="/science" data-nav>La science</a></li>
+      <li><a href="/aide-accompagnement" data-nav>Aide &amp; accompagnement</a></li>
+      <li><a href="/je-deviens-adherent" data-nav>Adhérer</a></li>
+      <li><a href="/faq" data-nav>Questions</a></li>
+      <li><a href="/nous-ecrire" data-nav>Nous écrire</a></li>
+    </ul>
+  </nav>
+  <p class="entete-tel">
+    <span>Ligne d’écoute des soignants</span><span class="sep" aria-hidden="true">·</span><span>7&nbsp;j/7, confidentielle</span><span class="sep" aria-hidden="true">·</span><a class="num" href="tel:+33608282589">06 08 28 25 89</a>
+  </p>
+</header>
+
+<main id="contenu">
+
+<!-- ================= ACCUEIL ================= -->
+<section class="vue" data-route="/" aria-labelledby="t-accueil">
+  <div class="cadre">
+    <div class="hero">
+      <div class="hero-texte">
+        <p class="surtitre">Écoute confraternelle · depuis 2010</p>
+        <h1 id="t-accueil">Vous soignez les autres. Qui prend soin de vous&nbsp;?</h1>
+        <p class="chapo">Depuis 2010, des médecins spécifiquement formés écoutent et accompagnent les professionnels de santé qui traversent une période difficile — épuisement, santé, organisation du travail. Gratuitement, en toute confidentialité.</p>
+        <div class="actions">
+          <a class="bouton" href="tel:+33608282589">Appeler le <span class="num">06 08 28 25 89</span></a>
+          <a class="bouton bouton-filet" href="/aide-accompagnement">Comment cela se passe</a>
+        </div>
+        <p class="hero-note">Votre appel est pris par un répondant formé, sans jugement et sans dossier à remplir.</p>
+      </div>
+      <aside class="carte-appel" aria-label="Ligne d’écoute">
+        <div>
+          <svg class="monogramme" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+            <circle class="anneau" cx="50" cy="50" r="46" stroke-width="1.2"/>
+            <circle class="anneau" cx="50" cy="50" r="41" stroke-width=".6"/>
+            <text x="50" y="64" text-anchor="middle" font-size="42">M</text>
+          </svg>
+          <p class="portail-ligne">La ligne des soignants</p>
+          <p><a class="numero-souligne" href="tel:+33608282589">06 08 28 25 89</a></p>
+          <p class="mentions-ligne">7&nbsp;jours sur&nbsp;7 · confidentielle · gratuite</p>
+          <p class="mentions-ligne"><i>Pour vous-même, ou pour un confrère, une consœur qui vous inquiète.</i></p>
+        </div>
+      </aside>
+    </div>
+
+    <h2 class="visuellement-cache">L’association en quatre repères</h2>
+    <ul class="registre">
+      <li><span class="valeur num">2010</span><span class="libelle">Création à Toulouse</span></li>
+      <li><span class="valeur num">1&nbsp;700+</span><span class="libelle">Soignants accompagnés</span></li>
+      <li><span class="valeur num">7&nbsp;j/7</span><span class="libelle">Ligne d’écoute dédiée</span></li>
+      <li><span class="valeur num">9</span><span class="libelle">Professions accompagnées</span></li>
+    </ul>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre">
+      <div class="tete-rubrique tete-centree">
+        <p class="surtitre">Ce que dit la science</p>
+        <h2>L’épuisement des soignants n’est pas un ressenti. Il est mesuré.</h2>
+      </div>
+      <ul class="gravures">
+        <li class="gravure">
+          <p class="chiffre num">49&nbsp;%<sup class="appel"><a href="#n-a1" aria-label="Note 1">1</a></sup></p>
+          <p>des médecins français sont touchés par le burnout au cours de leur carrière, dont 5&nbsp;% sous une forme sévère.</p>
+        </li>
+        <li class="gravure">
+          <p class="chiffre num">+44&nbsp;%<sup class="appel"><a href="#n-a2" aria-label="Note 2">2</a></sup></p>
+          <p>de risque de décès par suicide chez les médecins, par rapport à la population générale.</p>
+        </li>
+        <li class="gravure">
+          <p class="chiffre num">66,2&nbsp;%<sup class="appel"><a href="#n-a3" aria-label="Note 3">3</a></sup></p>
+          <p>des jeunes médecins présentent des symptômes anxieux&nbsp;; 27,7&nbsp;% des symptômes dépressifs, et 23,7&nbsp;% ont déjà eu des idées suicidaires.</p>
+        </li>
+      </ul>
+      <p class="sortie">Si ces chiffres résonnent en vous, parlez-en à un pair&nbsp;: <a class="num" href="tel:+33608282589">06 08 28 25 89</a>, 7&nbsp;j/7. En cas de pensées suicidaires, le <a href="tel:3114">3114</a> répond 24&nbsp;h/24.</p>
+
+      <div class="citation">
+        <p class="surtitre">La bonne nouvelle</p>
+        <p class="citation-titre">L’accompagnement fonctionne.</p>
+        <p class="citation-texte guillemets">Les interventions individuelles comme organisationnelles produisent des réductions cliniquement significatives du burnout des médecins.<sup class="appel-texte"><a href="#n-a4" aria-label="Note 4">4</a></sup></p>
+        <p class="citation-mention">Conclusion de la méta-analyse publiée dans <cite>The Lancet</cite>, résumée en français.</p>
+      </div>
+
+      <ol class="notes" aria-label="Sources">
+        <li id="n-a1"><cite>Kansoun et al., Journal of Affective Disorders</cite>, 2019 — méta-analyse de 37 études, 15&nbsp;183 médecins. <a href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" target="_blank" rel="noopener">ScienceDirect</a></li>
+        <li id="n-a2"><cite>Dutheil et al., PLOS ONE</cite>, 2019 — méta-analyse de 25 études (SMR 1,44). <a href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" target="_blank" rel="noopener">PLOS ONE</a></li>
+        <li id="n-a3"><cite>Enquête nationale santé mentale des jeunes médecins</cite>, 2017 — ANEMF · ISNAR-IMG · ISNCCA · ISNI, ≈&nbsp;22&nbsp;000 répondants. <a href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" target="_blank" rel="noopener">revue-hospitaliere.fr</a></li>
+        <li id="n-a4"><cite>West, Dyrbye, Erwin &amp; Shanafelt, The Lancet</cite>, 2016 — revue systématique et méta-analyse&nbsp;; conclusion résumée en français. <a href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" target="_blank" rel="noopener">The Lancet</a></li>
+      </ol>
+      <div class="renvoi"><a class="lien-suite" href="/science">Lire les quatre études en détail</a></div>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre">
+      <div class="tete-rubrique tete-centree">
+        <p class="surtitre">Un accompagnement pensé par des pairs</p>
+        <h2>Un appel suffit pour enclencher un vrai parcours d’aide</h2>
+      </div>
+      <ol class="parcours">
+        <li>
+          <span class="anneau" aria-hidden="true">I</span>
+          <h3>Vous appelez</h3>
+          <p>La ligne dédiée répond 7&nbsp;jours sur&nbsp;7. Un répondant formé vous écoute, sans jugement et sans dossier à remplir.</p>
+        </li>
+        <li>
+          <span class="anneau" aria-hidden="true">II</span>
+          <h3>Un pair vous reçoit</h3>
+          <p>Un médecin effecteur — formé au soin des soignants — vous propose un entretien confraternel strictement confidentiel.</p>
+        </li>
+        <li>
+          <span class="anneau" aria-hidden="true">III</span>
+          <h3>Vous avancez, accompagné·e</h3>
+          <p>Santé, travail, organisation&nbsp;: un accompagnement global sur plusieurs semaines, avec un objectif — retrouver votre autonomie.</p>
+        </li>
+      </ol>
+      <div class="renvoi"><a class="lien-suite" href="/aide-accompagnement">Découvrir le dispositif complet</a></div>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre">
+      <div class="tete-rubrique tete-centree">
+        <p class="surtitre">Depuis 2018, tous les soignants à ordre</p>
+        <h2>MOTS s’adresse à vous</h2>
+      </div>
+      <ul class="professions">
+        <li>Médecins</li><li>Infirmiers</li><li>Chirurgiens-dentistes</li>
+        <li>Masseurs-kinésithérapeutes</li><li>Pharmaciens</li><li>Pédicures-podologues</li>
+        <li>Sages-femmes</li><li>Orthoptistes</li><li>Biologistes</li>
+      </ul>
+      <p class="professions-note">Épuisement professionnel, surinvestissement, problème de santé, addiction, difficultés administratives, financières ou juridiques&nbsp;: quelle que soit la porte d’entrée, l’accompagnement est gratuit et confidentiel.</p>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre deux-colonnes">
+      <div>
+        <p class="surtitre">Des pairs formés</p>
+        <h2>Prendre soin d’un soignant, cela s’apprend</h2>
+      </div>
+      <div>
+        <p>L’association MOTS est née à Toulouse en 2010, portée par des médecins convaincus qu’un soignant en difficulté doit pouvoir parler à un pair qui comprend son quotidien.</p>
+        <p>Chaque médecin effecteur est formé — notamment via le diplôme inter-universitaire «&nbsp;Soigner les soignants&nbsp;», co-créé à l’initiative de l’association en 2015.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre">
+      <div class="carton-large">
+        <div>
+          <p class="surtitre">Adhésion, dons &amp; coopérations</p>
+          <h2>Soutenir celles et ceux qui écoutent</h2>
+          <p>Adhérer à MOTS, c’est donner à un professionnel de santé en difficulté la certitude qu’une voix répondra, aujourd’hui comme demain. L’adhésion est ouverte aux professionnels de santé, aux institutions — structures, établissements, organisations professionnelles — et à toute personne attachée à la cause.</p>
+          <div class="actions actions-centre">
+            <a class="bouton" href="https://www.helloasso.com/associations/mots-medecins-organisation-travail-sante" target="_blank" rel="noopener">Adhérer ou faire un don</a>
+            <a class="bouton bouton-filet" href="/je-deviens-adherent">Les modalités d’adhésion</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre tete-centree">
+      <p class="surtitre">Le premier pas</p>
+      <h2>Le premier pas tient en dix chiffres.</h2>
+      <p class="chapo" style="margin: 1.1rem auto 0">Vous hésitez pour vous-même, ou vous vous inquiétez pour un confrère ou une consœur&nbsp;? Appelez&nbsp;: la conversation reste entre soignants.</p>
+      <div class="actions actions-centre">
+        <a class="bouton" href="tel:+33608282589"><span class="num">06 08 28 25 89</span> — 7&nbsp;j/7</a>
+        <a class="bouton bouton-filet" href="/faq">Questions fréquentes</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= SCIENCE ================= -->
+<section class="vue" data-route="/science" aria-labelledby="t-science" hidden>
+  <div class="cadre">
+    <header class="entete-page">
+      <p class="surtitre">Ce que dit la science</p>
+      <h1 id="t-science">L’épuisement des soignants est mesuré. L’effet de l’aide aussi.</h1>
+      <p class="chapo">Quatre travaux publiés, présentés avec leur méthode et leur source. Les trois premiers décrivent l’ampleur de la souffrance des médecins&nbsp;; le quatrième montre que l’accompagnement réduit le burnout.</p>
+      <div class="fleuron" aria-hidden="true"><span></span></div>
+    </header>
+
+    <article class="planche" aria-labelledby="et1">
+      <div class="planche-tete">
+        <p class="planche-num">Étude I</p>
+        <p class="chiffre num">49&nbsp;%</p>
+      </div>
+      <div class="planche-corps">
+        <h2 id="et1">Près d’un médecin français sur deux touché par le burnout au cours de sa carrière (49&nbsp;%)</h2>
+        <p class="enonce">Chez 5&nbsp;% des médecins français, il prend une forme sévère.</p>
+        <p class="methode"><b>Méthode</b><span>Méta-analyse · 37 études · <span class="num">15&nbsp;183</span> médecins</span></p>
+        <p class="source"><cite>Kansoun et al., Journal of Affective Disorders</cite>, 2019.</p>
+        <hr class="planche-filet">
+        <p><a href="https://www.sciencedirect.com/science/article/abs/pii/S0165032718314873" target="_blank" rel="noopener">Consulter l’étude sur ScienceDirect</a></p>
+      </div>
+    </article>
+
+    <article class="planche" aria-labelledby="et2">
+      <div class="planche-tete">
+        <p class="planche-num">Étude II</p>
+        <p class="chiffre num">+44&nbsp;%</p>
+      </div>
+      <div class="planche-corps">
+        <h2 id="et2">Un risque de suicide plus élevé chez les médecins</h2>
+        <p class="enonce">Les médecins présentent un risque de décès par suicide supérieur de 44&nbsp;% à celui de la population générale.</p>
+        <p class="methode"><b>Méthode</b><span>Méta-analyse · 25 études · ratio standardisé de mortalité (SMR) 1,44</span></p>
+        <p class="source"><cite>Dutheil et al., PLOS ONE</cite>, 2019.</p>
+        <hr class="planche-filet">
+        <p><a href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0226361" target="_blank" rel="noopener">Consulter l’étude sur PLOS ONE</a></p>
+        <p class="source"><i>Si cette lecture vous touche personnellement&nbsp;: la ligne MOTS répond au <a class="num" href="tel:+33608282589">06 08 28 25 89</a>, 7&nbsp;j/7&nbsp;; le <a href="tel:3114">3114</a>, 24&nbsp;h/24.</i></p>
+      </div>
+    </article>
+
+    <article class="planche" aria-labelledby="et3">
+      <div class="planche-tete">
+        <p class="planche-num">Étude III</p>
+        <p class="chiffre num">66,2&nbsp;%</p>
+      </div>
+      <div class="planche-corps">
+        <h2 id="et3">Les jeunes médecins, en première ligne</h2>
+        <p class="enonce">66,2&nbsp;% des jeunes médecins présentent des symptômes anxieux.</p>
+        <ul class="detail">
+          <li><span class="num">27,7&nbsp;%</span><span>présentent des symptômes dépressifs</span></li>
+          <li><span class="num">23,7&nbsp;%</span><span>ont déjà eu des idées suicidaires</span></li>
+          <li><span class="num">5,8&nbsp;%</span><span>en ont eu dans le mois</span></li>
+        </ul>
+        <p class="methode"><b>Méthode</b><span>Enquête nationale · ANEMF · ISNAR-IMG · ISNCCA · ISNI · ≈&nbsp;<span class="num">22&nbsp;000</span> répondants</span></p>
+        <p class="source"><cite>Enquête nationale santé mentale des jeunes médecins</cite>, 2017.</p>
+        <hr class="planche-filet">
+        <p><a href="https://www.revue-hospitaliere.fr/Actualites/Sante-mentale-des-jeunes-medecins-Enquete-et-resultats" target="_blank" rel="noopener">Lire la présentation des résultats (revue-hospitaliere.fr)</a></p>
+        <p class="source"><i>Interne, jeune médecin, et vous vous reconnaissez ici&nbsp;? Un pair vous écoute au <a class="num" href="tel:+33608282589">06 08 28 25 89</a>. Le <a href="tel:3114">3114</a> répond 24&nbsp;h/24.</i></p>
+      </div>
+    </article>
+
+    <article class="planche" aria-labelledby="et4">
+      <div class="planche-tete">
+        <p class="planche-num">Étude IV</p>
+        <p class="intitule-planche">L’accompagnement fonctionne</p>
+      </div>
+      <div class="planche-corps">
+        <h2 id="et4">Agir réduit le burnout</h2>
+        <p class="enonce guillemets">Les interventions individuelles comme organisationnelles produisent des réductions cliniquement significatives du burnout des médecins.</p>
+        <p class="methode"><b>Méthode</b><span>Revue systématique et méta-analyse</span></p>
+        <p class="source"><cite>West, Dyrbye, Erwin &amp; Shanafelt, The Lancet</cite>, 2016. Conclusion résumée en français.</p>
+        <hr class="planche-filet">
+        <p><a href="https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(16)31279-X/abstract" target="_blank" rel="noopener">Consulter l’étude sur The Lancet</a></p>
+      </div>
+    </article>
+
+    <div class="rubrique">
+      <aside class="urgence" aria-labelledby="urg-science">
+        <div>
+          <p class="urgence-titre" id="urg-science">En cas d’urgence</p>
+          <div class="urgence-ligne">
+            <a class="urgence-num" href="tel:3114">3114</a>
+            <p>Numéro national de prévention du suicide. Gratuit, accessible 24&nbsp;h/24, pour vous ou pour un proche en souffrance.</p>
+          </div>
+          <p class="urgence-pied">Pour parler à un pair&nbsp;: ligne MOTS <a class="num" href="tel:+33608282589">06 08 28 25 89</a>, 7&nbsp;j/7. Urgence vitale immédiate&nbsp;: <a href="tel:15">15</a>.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ================= AIDE & ACCOMPAGNEMENT ================= -->
+<section class="vue" data-route="/aide-accompagnement" aria-labelledby="t-aide" hidden>
+  <div class="cadre">
+    <header class="entete-page">
+      <p class="surtitre">Le dispositif d’aide</p>
+      <h1 id="t-aide">Un appel, puis un vrai parcours d’accompagnement</h1>
+      <p class="chapo">Du premier coup de fil au retour à l’équilibre, le dispositif MOTS suit un chemin simple et balisé, pensé par des soignants pour des soignants.</p>
+      <div class="actions actions-centre">
+        <a class="bouton" href="tel:+33608282589">Appeler le <span class="num">06 08 28 25 89</span></a>
+      </div>
+    </header>
+
+    <div class="bloc-urgence">
+      <aside class="urgence" aria-labelledby="urg-aide">
+        <div>
+          <p class="urgence-titre" id="urg-aide">En cas d’urgence</p>
+          <div class="urgence-ligne">
+            <a class="urgence-num" href="tel:3114">3114</a>
+            <p>Numéro national de prévention du suicide. Gratuit, accessible 24&nbsp;h/24, pour vous ou pour un proche en souffrance.</p>
+          </div>
+          <p class="urgence-pied">En cas d’urgence vitale immédiate, pour vous-même ou pour autrui, composez le <a href="tel:15">15</a> sans attendre.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre">
+      <div class="tete-rubrique tete-centree">
+        <p class="surtitre">Étape par étape</p>
+        <h2>Le parcours, en trois temps</h2>
+        <p>Chaque parcours est unique, mais tous commencent de la même façon&nbsp;: par un appel. Ensuite, vous n’avancez jamais seul·e.</p>
+      </div>
+      <ol class="parcours parcours-detail">
+        <li>
+          <span class="anneau" aria-hidden="true">I</span>
+          <h3>Vous appelez la ligne dédiée</h3>
+          <p>Composez le <a class="num" href="tel:+33608282589">06 08 28 25 89</a>, 7&nbsp;jours sur&nbsp;7. Au bout du fil, un répondant formé à l’écoute des soignants prend le temps de comprendre votre situation, sans jugement.</p>
+          <p class="precision">Pas de dossier à constituer, pas de justification à fournir.</p>
+        </li>
+        <li>
+          <span class="anneau" aria-hidden="true">II</span>
+          <h3>Un médecin effecteur vous reçoit</h3>
+          <p>Il vous propose un entretien confraternel strictement confidentiel. Vous parlez d’égal à égal, avec un pair qui connaît la réalité de votre métier.</p>
+          <p class="precision">C’est ce médecin qui construit avec vous la suite, à votre rythme.</p>
+        </li>
+        <li>
+          <span class="anneau" aria-hidden="true">III</span>
+          <h3>Un accompagnement global, vers l’autonomie</h3>
+          <p>Santé, organisation du travail et, si besoin, dimensions administratives, financières ou juridiques&nbsp;: l’accompagnement s’adapte à votre situation, sur plusieurs semaines.</p>
+          <p class="precision">L’objectif n’est pas de faire à votre place, mais de vous permettre de reprendre pied durablement.</p>
+        </li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre">
+      <div class="tete-rubrique">
+        <p class="surtitre">Toutes les portes d’entrée sont légitimes</p>
+        <h2>Pour quelles difficultés&nbsp;?</h2>
+        <p>Il n’y a pas de «&nbsp;bon&nbsp;» ou de «&nbsp;mauvais&nbsp;» motif d’appel. Si quelque chose pèse sur votre exercice ou sur votre santé, c’est une raison suffisante.</p>
+      </div>
+      <ul class="filets">
+        <li><h3>Épuisement professionnel</h3><p>Burn-out, fatigue qui ne passe plus, sentiment de ne plus y arriver.</p></li>
+        <li><h3>Surinvestissement</h3><p>Un engagement sans limite qui finit par déborder sur votre santé et votre vie personnelle.</p></li>
+        <li><h3>Problème de santé</h3><p>Une maladie, physique ou psychique, difficile à concilier avec l’exercice de votre métier.</p></li>
+        <li><h3>Addictions</h3><p>Alcool, médicaments ou autres dépendances&nbsp;: en parler à un pair, sans crainte d’être jugé.</p></li>
+        <li><h3>Difficultés administratives, financières ou juridiques</h3><p>Des situations complexes qui pèsent sur l’exercice et méritent d’être démêlées avec méthode.</p></li>
+        <li><h3>Souffrance au travail</h3><p>Conflits, isolement, perte de sens, conditions d’exercice devenues intenables.</p></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre">
+      <div class="tete-rubrique tete-centree">
+        <p class="surtitre">Le cadre de l’accompagnement</p>
+        <h2>Trois principes, sans exception</h2>
+      </div>
+      <ul class="filets">
+        <li><h3>Gratuité</h3><p>L’accompagnement ne vous coûte rien&nbsp;: il repose sur un esprit d’entraide entre soignants.</p></li>
+        <li><h3>Confidentialité stricte</h3><p>Ce que vous confiez reste entre vous et le médecin qui vous accompagne. Rien ne sort du cadre de l’entretien.</p></li>
+        <li><h3>Entre pairs</h3><p>Vous êtes écouté·e et accompagné·e par des soignants qui connaissent votre quotidien de l’intérieur.</p></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre">
+      <div class="carton-large">
+        <div>
+          <p class="surtitre">La première étape</p>
+          <h2>Elle ne demande qu’un appel.</h2>
+          <p>Que vous appeliez pour vous-même ou pour un confrère ou une consœur qui vous inquiète, la ligne répond 7&nbsp;jours sur&nbsp;7 — et la conversation reste entre soignants.</p>
+          <div class="actions actions-centre">
+            <a class="bouton" href="tel:+33608282589">Appeler le <span class="num">06 08 28 25 89</span></a>
+            <a class="bouton bouton-filet" href="/faq">Consulter les questions fréquentes</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= ADHÉSION ================= -->
+<section class="vue" data-route="/je-deviens-adherent" aria-labelledby="t-adh" hidden>
+  <div class="cadre">
+    <header class="entete-page">
+      <p class="surtitre">Adhésion &amp; soutien</p>
+      <h1 id="t-adh">Rejoignez celles et ceux qui prennent soin des soignants</h1>
+      <p class="chapo">Adhérer à MOTS, c’est donner à un professionnel de santé en difficulté la certitude qu’une voix répondra, aujourd’hui comme demain. Chaque adhésion compte, chaque don aussi.</p>
+      <div class="actions actions-centre">
+        <a class="bouton" href="https://www.helloasso.com/associations/mots-medecins-organisation-travail-sante" target="_blank" rel="noopener">Adhérer ou faire un don en ligne</a>
+        <a class="bouton bouton-filet" href="/nous-ecrire">Nous écrire</a>
+      </div>
+      <p class="hero-note" style="margin: 1rem auto 0">L’adhésion et le don se font sur HelloAsso (site externe, ouverture dans un nouvel onglet).</p>
+    </header>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre">
+      <div class="tete-rubrique tete-centree">
+        <p class="surtitre">Pourquoi adhérer</p>
+        <h2>Une adhésion, trois effets concrets</h2>
+      </div>
+      <ul class="filets">
+        <li><h3>Faire vivre la ligne d’écoute</h3><p>Votre adhésion contribue directement au fonctionnement d’une ligne dédiée aux soignants, joignable 7&nbsp;jours sur&nbsp;7 par celles et ceux qui traversent une période difficile.</p></li>
+        <li><h3>Renforcer le réseau d’effecteurs</h3><p>Derrière chaque appel, il y a des médecins effecteurs formés au soin des soignants. Adhérer, c’est aider ce réseau de pairs à grandir et à rester disponible.</p></li>
+        <li><h3>Porter la prévention</h3><p>L’association agit aussi en amont&nbsp;: sensibiliser, prévenir l’épuisement professionnel et rappeler que la santé des soignants est l’affaire de tous.</p></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre deux-colonnes">
+      <div>
+        <p class="surtitre">Qui peut adhérer</p>
+        <h2>L’association est ouverte à toutes les bonnes volontés</h2>
+        <p style="margin-top:1rem;color:var(--encre-2)">Nul besoin d’être médecin pour soutenir MOTS.</p>
+      </div>
+      <ul class="filets" style="grid-template-columns:1fr">
+        <li><h3>Aux professionnels de santé</h3><p>Soignants en exercice ou retraités, sensibles à la santé de leurs pairs — que vous ayez ou non déjà fait appel au dispositif.</p></li>
+        <li><h3>Aux institutions</h3><p>Structures, établissements et organisations professionnelles qui souhaitent s’engager aux côtés des soignants.</p></li>
+        <li><h3>À toute personne</h3><p>Chacun peut adhérer ou donner, tout simplement parce que la cause lui tient à cœur&nbsp;: sans soignants en bonne santé, pas de soin.</p></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre">
+      <div class="tete-rubrique tete-centree">
+        <p class="surtitre">À quoi sert votre adhésion</p>
+        <h2>Votre soutien se traduit en actions</h2>
+      </div>
+      <ul class="filets">
+        <li><h3>Le fonctionnement de la ligne</h3><p>Maintenir une écoute disponible 7&nbsp;j/7, confidentielle et sans condition.</p></li>
+        <li><h3>La formation des effecteurs</h3><p>Former les médecins qui reçoivent et accompagnent leurs pairs en difficulté.</p></li>
+        <li><h3>Les outils du dispositif</h3><p>Développer les outils qui soutiennent l’accompagnement, comme OASIS.</p></li>
+        <li><h3>Les journées de rencontre</h3><p>Réunir le réseau pour partager les pratiques et faire avancer la cause.</p></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre">
+      <div class="carton-large">
+        <div>
+          <p class="surtitre">Prêt·e à franchir le pas&nbsp;?</p>
+          <h2>Quelques minutes en ligne suffisent</h2>
+          <p>L’adhésion comme le don se font en ligne. Une question avant de vous décider&nbsp;? Écrivez-nous, nous vous répondrons.</p>
+          <div class="actions actions-centre">
+            <a class="bouton" href="https://www.helloasso.com/associations/mots-medecins-organisation-travail-sante" target="_blank" rel="noopener">Adhérer sur HelloAsso</a>
+            <a class="bouton bouton-filet" href="/nous-ecrire">Nous écrire</a>
+          </div>
+        </div>
+      </div>
+      <p class="sortie"><span style="font-style:normal" class="cap">Besoin d’aide&nbsp;? N’attendez pas d’adhérer.</span><br>L’accompagnement de MOTS ne dépend d’aucune adhésion&nbsp;: si vous traversez une période difficile, appelez le <a class="num" href="tel:+33608282589">06 08 28 25 89</a>. La ligne répond 7&nbsp;jours sur&nbsp;7, en toute confidentialité.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FAQ ================= -->
+<section class="vue" data-route="/faq" aria-labelledby="t-faq" hidden>
+  <div class="cadre">
+    <header class="entete-page">
+      <p class="surtitre">Questions fréquentes</p>
+      <h1 id="t-faq">Vos questions, nos réponses</h1>
+      <p class="chapo">Avant d’appeler, il est normal de vouloir savoir à quoi s’attendre. Voici les réponses aux questions que l’on nous pose le plus souvent. Si la vôtre n’y figure pas, le plus simple reste d’appeler — ou de <a href="/nous-ecrire">nous écrire</a>.</p>
+      <div class="fleuron" aria-hidden="true"><span></span></div>
+    </header>
+
+    <div class="faq">
+      <details>
+        <summary>Qui peut appeler MOTS&nbsp;?</summary>
+        <div><p>Depuis 2018, le dispositif est ouvert aux neuf professions de santé à ordre&nbsp;: médecins, infirmiers, chirurgiens-dentistes, masseurs-kinésithérapeutes, pharmaciens, pédicures-podologues, sages-femmes, orthoptistes et biologistes. Quel que soit votre mode d’exercice ou votre spécialité, la ligne vous est ouverte. Un seul appel suffit pour être écouté·e.</p></div>
+      </details>
+      <details>
+        <summary>Combien cela coûte-t-il&nbsp;?</summary>
+        <div><p>Rien&nbsp;: l’accompagnement est entièrement gratuit pour le soignant qui appelle. Le dispositif repose sur un esprit d’entraide confraternelle — des pairs qui prennent soin de leurs pairs. Aucune facture, aucune avance de frais, aucune contrepartie ne vous sera demandée.</p></div>
+      </details>
+      <details>
+        <summary>Mon appel restera-t-il vraiment confidentiel&nbsp;?</summary>
+        <div><p>Oui, la confidentialité est stricte et constitue le socle du dispositif. Ce qui se dit lors de l’entretien confraternel reste entre vous et le médecin qui vous reçoit. Vous pouvez parler librement de votre santé, de votre travail ou de vos difficultés, sans crainte que cela circule.</p></div>
+      </details>
+      <details>
+        <summary>Que se passe-t-il concrètement après mon appel&nbsp;?</summary>
+        <div><p>Votre appel est d’abord pris par un répondant formé, qui vous écoute et recueille votre situation. Il vous met ensuite en relation avec un médecin effecteur, qui vous propose un entretien confraternel. C’est ce médecin qui construit avec vous la suite de l’accompagnement, à votre rythme.</p></div>
+      </details>
+      <details>
+        <summary>Qui sont les médecins effecteurs&nbsp;?</summary>
+        <div><p>Ce sont des pairs&nbsp;: des médecins qui connaissent la réalité du soin et qui se sont spécifiquement formés à l’accompagnement des soignants. Beaucoup sont notamment passés par le diplôme inter-universitaire «&nbsp;Soigner les soignants&nbsp;». Vous parlez donc à quelqu’un qui comprend votre quotidien professionnel.</p></div>
+      </details>
+      <details>
+        <summary>Puis-je appeler pour un confrère ou une consœur qui m’inquiète&nbsp;?</summary>
+        <div><p>Oui, et c’est même un réflexe précieux. Si le comportement ou l’état d’un confrère ou d’une consœur vous préoccupe, vous pouvez contacter MOTS pour en parler et être conseillé·e sur la manière de l’aider. S’inquiéter pour un pair fait aussi partie de l’entraide confraternelle.</p></div>
+      </details>
+      <details>
+        <summary>Qu’est-ce qu’OASIS&nbsp;?</summary>
+        <div><p>OASIS est un outil numérique d’autoévaluation lancé en 2024. Il permet à un professionnel de santé de faire le point sur sa situation, en quelques minutes et en toute autonomie. C’est une première étape utile pour prendre conscience d’une difficulté, avant — ou en complément — d’un appel.</p></div>
+      </details>
+      <details>
+        <summary>MOTS intervient-elle partout en France&nbsp;?</summary>
+        <div><p>Oui, le dispositif est national&nbsp;: où que vous exerciez, vous pouvez appeler. Le siège de l’association se trouve à Toulouse, mais l’accompagnement n’est pas limité à une région. La distance n’est donc jamais un obstacle pour être aidé·e.</p></div>
+      </details>
+      <details>
+        <summary>Comment puis-je soutenir l’association&nbsp;?</summary>
+        <div><p>La façon la plus simple est d’adhérer via la plateforme HelloAsso — toutes les modalités sont détaillées sur la page <a href="/je-deviens-adherent">Devenir adhérent</a>. Chaque adhésion renforce la capacité de MOTS à écouter et accompagner des soignants en difficulté. En parler autour de vous est aussi une aide précieuse.</p></div>
+      </details>
+      <details>
+        <summary>Et si ma situation n’est pas «&nbsp;assez grave&nbsp;»&nbsp;?</summary>
+        <div><p>Il n’existe pas de seuil de gravité pour appeler&nbsp;: toute difficulté mérite une écoute. Fatigue qui s’installe, doutes, tensions au travail, question de santé — mieux vaut en parler tôt que d’attendre que la situation s’aggrave. Appeler n’engage à rien d’autre qu’une conversation.</p></div>
+      </details>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre">
+      <div class="carton-large">
+        <div>
+          <p class="surtitre">Une question à laquelle seule une voix peut répondre&nbsp;?</p>
+          <h2>Un répondant formé vous écoute</h2>
+          <p>Gratuitement et en toute confidentialité. Le premier pas, c’est un appel.</p>
+          <div class="actions actions-centre">
+            <a class="bouton" href="tel:+33608282589">Appeler le <span class="num">06 08 28 25 89</span></a>
+            <a class="bouton bouton-filet" href="/je-deviens-adherent">Soutenir l’association</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= NOUS ÉCRIRE ================= -->
+<section class="vue" data-route="/nous-ecrire" aria-labelledby="t-ecrire" hidden>
+  <div class="cadre">
+    <header class="entete-page">
+      <p class="surtitre">Contact</p>
+      <h1 id="t-ecrire">Nous écrire</h1>
+      <p class="chapo">Une question sur l’association, une candidature, un projet de coopération&nbsp;? Cette page réunit nos coordonnées. Et si vous traversez une période difficile, le téléphone reste le chemin le plus court.</p>
+    </header>
+
+    <div class="bloc-urgence">
+      <aside class="urgence" aria-labelledby="urg-ecrire">
+        <div>
+          <p class="urgence-titre" id="urg-ecrire">Un courrier peut attendre. Pas vous.</p>
+          <div class="urgence-ligne">
+            <a class="urgence-num" href="tel:3114">3114</a>
+            <p>Numéro national de prévention du suicide. Gratuit, accessible 24&nbsp;h/24, pour vous ou pour un proche en souffrance.</p>
+          </div>
+          <p class="urgence-pied">Pour parler à un pair, la ligne MOTS répond 7&nbsp;jours sur&nbsp;7&nbsp;: <a class="num" href="tel:+33608282589">06 08 28 25 89</a>. Urgence vitale immédiate&nbsp;: <a href="tel:15">15</a>.</p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre deux-colonnes">
+      <div class="colonne-form">
+        <h2>Votre message</h2>
+        <p style="color:var(--encre-2);margin-bottom:1.5rem">Ce formulaire illustre le parcours de contact envisagé pour le futur site.</p>
+        <form class="formulaire" data-demo novalidate>
+          <div class="champ"><label for="f-nom">Votre nom</label><input id="f-nom" name="nom" type="text" autocomplete="name"></div>
+          <div class="champ"><label for="f-prof">Votre profession</label>
+            <select id="f-prof" name="profession">
+              <option value="">Sélectionnez votre profession</option>
+              <option>Médecins</option><option>Infirmiers</option><option>Chirurgiens-dentistes</option>
+              <option>Masseurs-kinésithérapeutes</option><option>Pharmaciens</option><option>Pédicures-podologues</option>
+              <option>Sages-femmes</option><option>Orthoptistes</option><option>Biologistes</option><option>Autre</option>
+            </select>
+          </div>
+          <div class="champ"><label for="f-mail">Votre adresse e-mail</label><input id="f-mail" name="email" type="email" autocomplete="email"></div>
+          <div class="champ"><label for="f-msg">Votre message</label><textarea id="f-msg" name="message"></textarea></div>
+          <div><button class="bouton" type="submit">Envoyer le message</button></div>
+          <p class="statut" data-statut role="status" aria-live="polite"></p>
+        </form>
+      </div>
+      <div class="colonne-coord">
+        <div>
+          <h2>Nos coordonnées</h2>
+          <p style="color:var(--encre-2);margin-bottom:1rem">Le courrier reste le bon canal pour les démarches qui demandent un écrit.</p>
+          <p class="surtitre" style="margin-bottom:.4rem">Adresse du siège</p>
+          <address class="adresse">Association MOTS<br>Maison des professions de santé<br>9 avenue Jean Gonord<br>31500 Toulouse</address>
+        </div>
+        <div>
+          <p class="surtitre" style="margin-bottom:.4rem">Site officiel</p>
+          <p>Cette démonstration ne remplace pas le site de l’association. Pour toute information de référence&nbsp;: <a href="https://www.association-mots.org" target="_blank" rel="noopener">association-mots.org</a>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rubrique">
+    <div class="cadre">
+      <div class="tete-rubrique tete-centree">
+        <p class="surtitre">Dans quels cas nous écrire&nbsp;?</p>
+        <h2>Trois raisons d’écrire plutôt que d’appeler</h2>
+      </div>
+      <ul class="filets">
+        <li><h3>Candidature de médecin effecteur</h3><p>Vous êtes médecin et souhaitez rejoindre le réseau de pairs qui reçoivent et accompagnent les soignants en difficulté.</p></li>
+        <li><h3>Proposition de coopération</h3><p>Votre structure, institution ou organisation professionnelle souhaite construire un partenariat avec l’association.</p></li>
+        <li><h3>Demande presse</h3><p>Vous êtes journaliste et préparez un sujet sur la santé des soignants ou sur le dispositif MOTS.</p></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ================= MENTIONS ================= -->
+<section class="vue" data-route="/mentions" aria-labelledby="t-mentions" hidden>
+  <div class="cadre">
+    <header class="entete-page">
+      <p class="surtitre">Transparence</p>
+      <h1 id="t-mentions">Mentions légales</h1>
+      <p class="chapo">Cette page précise le statut exact de ce site, l’origine de ses contenus et les choix techniques retenus en matière de données personnelles et de référencement.</p>
+      <div class="fleuron" aria-hidden="true"><span></span></div>
+    </header>
+
+    <div class="mentions">
+      <section>
+        <h2>Nature du site</h2>
+        <p>Ce site est une <strong>démonstration non officielle</strong> de refonte&nbsp;: une proposition graphique et éditoriale réalisée à titre d’exercice. Il ne s’agit ni d’un site officiel, ni d’un site affilié à l’Association MOTS (Médecin-Organisation-Travail-Santé), et son contenu n’a été ni commandé ni validé par elle.</p>
+        <p>Aucune information publiée ici ne saurait engager l’association. Pour toute démarche réelle, reportez-vous à son site officiel&nbsp;: <a href="https://www.association-mots.org" target="_blank" rel="noopener">association-mots.org</a>.</p>
+      </section>
+      <section>
+        <h2>Contenus et propriété intellectuelle</h2>
+        <h3>Des textes originaux</h3>
+        <p>Les textes de cette démonstration ont été rédigés à partir d’informations publiquement disponibles, sans reproduction du site officiel de l’association.</p>
+        <h3>Ce qui appartient à l’association</h3>
+        <p>Le nom, l’identité et les contenus officiels de l’Association MOTS appartiennent à l’Association MOTS. Toute référence les concernant renvoie à <a href="https://www.association-mots.org" target="_blank" rel="noopener">son site officiel</a>.</p>
+        <h3>Sources scientifiques</h3>
+        <p>Les chiffres cités proviennent de quatre publications, référencées et liées sur la page <a href="/science">La science</a>. Ils sont repris de ces publications (certains arrondis ou résumés en français).</p>
+      </section>
+      <section>
+        <h2>Données personnelles</h2>
+        <h3>Aucune collecte</h3>
+        <p>Ce site ne collecte aucune donnée personnelle&nbsp;: pas de compte, pas de mesure d’audience, pas de profilage.</p>
+        <h3>Ni cookie, ni traceur</h3>
+        <p>Aucun cookie n’est déposé et aucun traceur tiers n’est embarqué. Aucune ressource externe n’est chargée&nbsp;: les polices sont celles de votre système, les ornements sont dessinés dans la page. Seule votre préférence d’affichage (clair ou sombre) peut être retenue par votre navigateur, sur votre appareil.</p>
+        <h3>Formulaire désactivé</h3>
+        <p>Le formulaire de contact est volontairement désactivé&nbsp;: rien de ce que vous pourriez y saisir n’est transmis ni conservé.</p>
+      </section>
+      <section>
+        <h2>Référencement et hébergement</h2>
+        <h3>Référencement</h3>
+        <p>Ce site est volontairement exclu de l’indexation par les moteurs de recherche (directive «&nbsp;noindex&nbsp;»), afin d’éviter toute confusion avec le site officiel de l’association.</p>
+        <h3>Hébergement</h3>
+        <p>Les informations relatives à l’hébergeur (raison sociale, adresse, contact) seront complétées au moment du déploiement de cette démonstration.</p>
+      </section>
+      <p><a class="lien-suite" href="/">Retour à l’accueil</a></p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ================= PIED DE PAGE ================= -->
+<footer class="pied">
+  <hr class="double-filet">
+  <div class="cadre">
+    <div class="pied-haut">
+      <div class="pied-marque">
+        <svg class="monogramme" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+          <circle class="anneau" cx="50" cy="50" r="46" stroke-width="1.6"/>
+          <circle class="anneau" cx="50" cy="50" r="41" stroke-width=".8"/>
+          <text x="50" y="64" text-anchor="middle" font-size="42">M</text>
+        </svg>
+        <p class="pied-nom">MOTS</p>
+        <p class="pied-devise">Prendre soin des soignants</p>
+        <p style="color:var(--encre-2);font-size:var(--t-petit)">Médecin · Organisation · Travail · Santé. Des soignants formés pour écouter et accompagner les soignants en difficulté, en toute confidentialité, depuis 2010.</p>
+      </div>
+      <nav aria-label="Pages du site">
+        <h2>Le site</h2>
+        <ul class="pied-liens">
+          <li><a href="/">Accueil</a></li>
+          <li><a href="/science">La science</a></li>
+          <li><a href="/aide-accompagnement">Aide &amp; accompagnement</a></li>
+          <li><a href="/je-deviens-adherent">Devenir adhérent</a></li>
+          <li><a href="/faq">Questions fréquentes</a></li>
+          <li><a href="/nous-ecrire">Nous écrire</a></li>
+          <li><a href="/mentions">Mentions légales</a></li>
+        </ul>
+      </nav>
+      <div>
+        <h2>Siège</h2>
+        <address class="adresse">Maison des professions de santé<br>9 avenue Jean Gonord<br>31500 Toulouse</address>
+        <p style="margin-top:1rem">Ligne d’écoute, 7&nbsp;j/7&nbsp;:<br><a class="num" href="tel:+33608282589">06 08 28 25 89</a></p>
+      </div>
+    </div>
+    <aside class="urgence" aria-labelledby="urg-pied" style="max-width:none;margin-bottom:2.5rem">
+      <div>
+        <p class="urgence-titre" id="urg-pied">En cas d’urgence</p>
+        <div class="urgence-ligne">
+          <a class="urgence-num" href="tel:3114">3114</a>
+          <p>Numéro national de prévention du suicide — gratuit, 24&nbsp;h/24. Urgence vitale immédiate&nbsp;: <a href="tel:15">15</a>.</p>
+        </div>
+      </div>
+    </aside>
+    <div class="pied-bas">
+      <p>Démonstration de refonte — proposition non officielle, non affiliée à l’Association MOTS. Site officiel&nbsp;: <a href="https://www.association-mots.org" target="_blank" rel="noopener">association-mots.org</a></p>
+      <button type="button" class="bascule" id="bascule-theme">Affichage&nbsp;: selon le système</button>
+    </div>
+  </div>
+</footer>
+</div>
+
+<script>
+(function () {
+  var racine = document.documentElement
+
+  // Thème (préférence par visiteur, facultative)
+  var cleTheme = 'mots-maison-theme'
+  var boutonTheme = document.getElementById('bascule-theme')
+  var libelles = { auto: 'Affichage : selon le système', light: 'Affichage : ivoire', dark: 'Affichage : encre profonde' }
+  var themeCourant = 'auto'
+  try { themeCourant = localStorage.getItem(cleTheme) || 'auto' } catch (e) {}
+  function appliquerTheme (t) {
+    if (t === 'light' || t === 'dark') racine.setAttribute('data-theme', t)
+    else { racine.removeAttribute('data-theme'); t = 'auto' }
+    if (boutonTheme) boutonTheme.textContent = libelles[t]
+  }
+  appliquerTheme(themeCourant)
+  if (boutonTheme) boutonTheme.addEventListener('click', function () {
+    themeCourant = themeCourant === 'auto' ? 'light' : themeCourant === 'light' ? 'dark' : 'auto'
+    appliquerTheme(themeCourant)
+    try { localStorage.setItem(cleTheme, themeCourant) } catch (e) {}
+  })
+
+  // Hauteur du bandeau (le portail démarre dessous)
+  var bandeau = document.getElementById('bandeau')
+  function mesurer () { if (bandeau) racine.style.setProperty('--hb', bandeau.offsetHeight + 'px') }
+  mesurer()
+  window.addEventListener('resize', mesurer)
+
+  // Portail
+  var site = document.getElementById('site')
+  var portail = document.getElementById('portail')
+  if (portail) {
+    document.body.style.overflow = 'hidden'
+    if (site) site.setAttribute('inert', '')
+    var surTouche = function (e) {
+      if (e.key === 'Escape') { entrer(); return }
+      if (e.key !== 'Tab') return
+      var f = Array.prototype.slice.call(portail.querySelectorAll('button, a[href]'))
+      if (!f.length) return
+      var p = f[0], d = f[f.length - 1], a = document.activeElement, dedans = portail.contains(a)
+      if (e.shiftKey && (!dedans || a === p)) { e.preventDefault(); d.focus() }
+      else if (!e.shiftKey && (!dedans || a === d)) { e.preventDefault(); p.focus() }
+    }
+    var entrer = function () {
+      // Indispensable : sans ce retrait, Tab reste piégé vers des boutons masqués après la fermeture.
+      window.removeEventListener('keydown', surTouche)
+      if (site) site.removeAttribute('inert')
+      portail.classList.add('ferme'); portail.setAttribute('aria-hidden', 'true')
+      document.body.style.overflow = ''
+      var c = document.getElementById('contenu'); if (c) { c.setAttribute('tabindex', '-1'); c.focus({ preventScroll: true }) }
+      setTimeout(function () { portail.style.display = 'none' }, 500)
+    }
+    portail.querySelectorAll('[data-entrer]').forEach(function (b) { b.addEventListener('click', entrer) })
+    window.addEventListener('keydown', surTouche)
+    var be = document.getElementById('portail-entrer'); if (be) be.focus()
+  }
+
+  // Routeur hash
+  var vues = Array.prototype.slice.call(document.querySelectorAll('.vue'))
+  var liensNav = Array.prototype.slice.call(document.querySelectorAll('[data-nav]'))
+  var titres = {
+    '/': 'MOTS — Prendre soin des soignants',
+    '/science': 'La science — MOTS',
+    '/aide-accompagnement': 'Aide & accompagnement — MOTS',
+    '/je-deviens-adherent': 'Devenir adhérent — MOTS',
+    '/faq': 'Questions fréquentes — MOTS',
+    '/nous-ecrire': 'Nous écrire — MOTS',
+    '/mentions': 'Mentions légales — MOTS'
+  }
+  var premier = true
+  function afficher (route) {
+    var ok = false
+    vues.forEach(function (v) { var m = v.getAttribute('data-route') === route; v.hidden = !m; if (m) ok = true })
+    if (!ok) { route = '/'; vues.forEach(function (v) { v.hidden = v.getAttribute('data-route') !== '/' }) }
+    liensNav.forEach(function (a) {
+      if (a.getAttribute('href') === route) a.setAttribute('aria-current', 'page')
+      else a.removeAttribute('aria-current')
+    })
+    if (titres[route]) document.title = titres[route]
+    window.scrollTo(0, 0)
+    if (!premier) {
+      var vue = document.querySelector('.vue[data-route="' + route + '"]')
+      var t = vue && vue.querySelector('h1')
+      if (t) { t.setAttribute('tabindex', '-1'); t.focus({ preventScroll: true }) }
+    }
+    premier = false
+  }
+  function route () { var h = location.hash.replace(/^#/, ''); return h && h.charAt(0) === '/' ? h : '/' }
+  window.addEventListener('hashchange', function () {
+    if (location.hash === '' || location.hash.charAt(1) === '/') afficher(route())
+  })
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest ? e.target.closest('a[href]') : null
+    if (!a) return
+    var href = a.getAttribute('href') || ''
+    if (href.charAt(0) === '/' && href.charAt(1) !== '/') {
+      e.preventDefault()
+      if (location.hash === '#' + href) afficher(href)
+      else location.hash = href
+      return
+    }
+    // Ancres internes (notes, évitement) : défilement sans casser la route courante
+    if (href.charAt(0) === '#' && href.length > 1 && href.charAt(1) !== '/') {
+      var cible = document.getElementById(href.slice(1))
+      if (!cible) return
+      e.preventDefault()
+      if (!cible.hasAttribute('tabindex')) cible.setAttribute('tabindex', '-1')
+      cible.scrollIntoView({ block: 'start' })
+      cible.focus({ preventScroll: true })
+    }
+  })
+  afficher(route())
+
+  // Formulaire : démonstration uniquement
+  Array.prototype.slice.call(document.querySelectorAll('form[data-demo]')).forEach(function (f) {
+    f.addEventListener('submit', function (e) {
+      e.preventDefault()
+      var s = f.querySelector('[data-statut]')
+      if (s) s.textContent = 'Démonstration : ce formulaire n’envoie rien et aucune donnée n’est collectée. Pour être écouté·e dès maintenant, appelez le 06 08 28 25 89.'
+    })
+  })
+})()
+</script>

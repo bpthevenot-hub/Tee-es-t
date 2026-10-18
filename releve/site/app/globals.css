@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+/*
+  Relève — design system « Salle de garde ».
+  Règles : un seul accent (ambre) ; le rouge est réservé au 3114 ; aucun bleu ;
+  motion quasi nulle (fondus 120 ms) ; la couleur pleine page n'existe que pour
+  le check-in du soignant (quatre quadrants francs, sans dégradé).
+*/
+@theme {
+  --color-fond: #1b1917;
+  --color-surface: #2a2724;
+  --color-surface-2: #35312d;
+  --color-filet: #46403a;
+  --color-ivoire: #ede6da;
+  --color-sourd: #b9b0a2;
+  --color-ambre: #e0a040;
+  --color-ambre-nuit: #d9a95e;
+  --color-rouge-3114: #b3412e;
+  --color-papier: #f2ede4;
+  --color-papier-2: #e7e0d3;
+  --color-encre: #1b1917;
+  --color-encre-sourde: #5c554c;
+  /* Check-in : énergie × agréabilité — quatre couleurs pleines. */
+  --color-q-ambre: #e8b04b;
+  --color-q-brique: #c84b3a;
+  --color-q-prune: #5b3a4e;
+  --color-q-sauge: #4e8a6a;
+
+  --font-titre: "Barlow Condensed", "Archivo Narrow", "Roboto Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", "Berkeley Mono", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-texte: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --radius-clinique: 6px;
+  --shadow-plaque: 0 1px 0 rgba(0, 0, 0, 0.35), 0 8px 24px -16px rgba(0, 0, 0, 0.6);
+}
+
+/* ---- Modes ---- */
+:root {
+  color-scheme: dark;
+  --mode-fond: var(--color-fond);
+  --mode-surface: var(--color-surface);
+  --mode-surface-2: var(--color-surface-2);
+  --mode-filet: var(--color-filet);
+  --mode-texte: var(--color-ivoire);
+  --mode-sourd: var(--color-sourd);
+  --mode-accent: var(--color-ambre);
+}
+/* Nuit : fond plus profond, texte ramené vers l'ambre, zéro bleu. */
+[data-mode="nuit"] {
+  --mode-fond: #14110e;
+  --mode-surface: #1d1915;
+  --mode-surface-2: #26201a;
+  --mode-filet: #3a3128;
+  --mode-texte: var(--color-ambre-nuit);
+  --mode-sourd: #a3875a;
+  --mode-accent: var(--color-ambre-nuit);
+}
+/* Jour : papier, pour l'écran direction (et pour qui le préfère). */
+[data-mode="jour"] {
+  color-scheme: light;
+  --mode-fond: var(--color-papier);
+  --mode-surface: #ffffff;
+  --mode-surface-2: var(--color-papier-2);
+  --mode-filet: #cfc6b6;
+  --mode-texte: var(--color-encre);
+  --mode-sourd: var(--color-encre-sourde);
+  --mode-accent: #b97f22;
+}
+
+html { scroll-behavior: smooth; }
+body {
+  background: var(--mode-fond);
+  color: var(--mode-texte);
+  font-family: var(--font-texte);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 120ms linear, color 120ms linear;
+}
+::selection { background: var(--color-ambre); color: var(--color-encre); }
+
+/* ---- Typographie ---- */
+.titre {
+  font-family: var(--font-titre);
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  line-height: 0.98;
+  text-wrap: balance;
+  text-transform: uppercase;
+}
+.titre-hero { font-size: clamp(2.6rem, 7vw, 6rem); }
+.titre-section { font-size: clamp(1.9rem, 4vw, 3.2rem); }
+.titre-bloc { font-size: clamp(1.25rem, 2.2vw, 1.6rem); }
+.phrase { font-size: clamp(1.6rem, 3.2vw, 2.5rem); line-height: 1.15; text-wrap: balance; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.donnee { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
+.etiquette {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mode-sourd);
+}
+.texte { max-width: 65ch; }
+.sourd { color: var(--mode-sourd); }
+
+/* ---- Composants ---- */
+.conteneur { width: 100%; max-width: 76rem; margin-inline: auto; padding-inline: 1.25rem; }
+@media (min-width: 40rem) { .conteneur { padding-inline: 2rem; } }
+
+.plaque {
+  background: var(--mode-surface);
+  border: 1px solid var(--mode-filet);
+  border-radius: var(--radius-clinique);
+  box-shadow: var(--shadow-plaque);
+  padding: 1.25rem 1.4rem;
+}
+.filet { border-top: 1px solid var(--mode-filet); }
+
+.bouton {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.6rem;
+  min-height: 2.9rem; padding: 0.65rem 1.25rem;
+  border-radius: var(--radius-clinique);
+  font-family: var(--font-titre); font-weight: 600; font-size: 1.05rem; letter-spacing: 0.04em; text-transform: uppercase;
+  background: var(--mode-accent); color: var(--color-encre);
+  border: 1px solid transparent;
+  transition: filter 120ms linear, background-color 120ms linear;
+}
+.bouton:hover { filter: brightness(1.06); }
+.bouton-second {
+  background: transparent; color: var(--mode-texte);
+  border-color: var(--mode-filet);
+}
+.bouton-second:hover { background: var(--mode-surface-2); filter: none; }
+.bouton-3114 {
+  background: var(--color-rouge-3114); color: #fff;
+}
+.bouton-3114:hover { filter: brightness(1.08); }
+
+/* Focus : visible, contrasté sur tous les fonds, jamais retiré. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--mode-accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-clinique);
+}
+
+/* Lien d'évitement */
+.evitement {
+  position: absolute; left: 1rem; top: -4rem; z-index: 100;
+  background: var(--color-ambre); color: var(--color-encre);
+  padding: 0.6rem 1rem; border-radius: var(--radius-clinique);
+  font-family: var(--font-mono); font-size: 0.85rem;
+}
+.evitement:focus { top: 1rem; }
+
+/* Pulsation 1 Hz : réservée à ce qu'un humain a signalé. */
+@keyframes pulsation-1hz { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.signale { animation: pulsation-1hz 1s ease-in-out infinite; }
+
+/* Fondus de 120 ms, rien d'autre. */
+.fondu { transition: opacity 120ms linear, background-color 120ms linear, color 120ms linear, border-color 120ms linear; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+
+/* Tableaux de données : jamais de scroll horizontal du body. */
+.tableau { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+.tableau th, .tableau td { text-align: left; padding: 0.6rem 0.75rem; border-top: 1px solid var(--mode-filet); vertical-align: top; }
+.tableau th { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--mode-sourd); font-weight: 500; }
+.defilable { overflow-x: auto; -webkit-overflow-scrolling: touch; }

@@ -47,7 +47,9 @@ CLIENT_CONFIG = {"installed": {"client_id": "client-id", "client_secret": "clien
 
 @pytest.fixture
 def clean_env(monkeypatch):
-    for name in PATH_VARS + SECRET_VARS + ("CI",):
+    # Keep local-only failure tests independent of workstation proxy settings.
+    proxy_vars = tuple(f"{prefix}proxy" for prefix in ("http_", "https_", "all_", "no_"))
+    for name in PATH_VARS + SECRET_VARS + ("CI",) + proxy_vars + tuple(x.upper() for x in proxy_vars):
         monkeypatch.delenv(name, raising=False)
     return monkeypatch
 
