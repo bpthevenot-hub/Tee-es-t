@@ -8,7 +8,7 @@ résultat business concret : automatisation, lead generation, produit déployabl
 
 | Dossier              | Stack                     | Rôle business                                           | État          |
 | -------------------- | ------------------------- | ------------------------------------------------------- | ------------- |
-| `commercial-agent/`  | Python + Claude Agent SDK | Agent commercial autonome (Gmail + HubSpot + Notion)    | **En prod**   |
+| `commercial-agent/`  | Python + Claude Agent SDK | Agent commercial (Gmail + HubSpot + Notion)             | **Manuel**    |
 | `studentflow/`       | Python 3.11 + FastAPI     | Matching temps-réel jobs ↔ étudiants (produit SaaS)     | **MVP**       |
 | `docs/`              | HTML statique             | Page publique "statut du robot" (Netlify)               | En prod       |
 | `daleme-scoop-2.html`| HTML + CSS                | Article one-shot (désaligné du reste, à archiver)       | Legacy        |
@@ -16,8 +16,9 @@ résultat business concret : automatisation, lead generation, produit déployabl
 ## Systèmes en production
 
 ### Robot commercial (`commercial-agent/`)
-Agent autonome qui tourne toutes les 10 minutes via GitHub Actions
-(`.github/workflows/robot.yml`) et opère trois routines :
+Agent lancé manuellement via GitHub Actions (`.github/workflows/robot.yml`).
+Les déclenchements planifiés sont désactivés depuis le 13 octobre 2026 à la
+demande du propriétaire. Il propose trois routines :
 
 - **morning** — traite les emails Gmail non-lus, rédige des brouillons, liste les
   contacts HubSpot à relancer, génère devis/propositions

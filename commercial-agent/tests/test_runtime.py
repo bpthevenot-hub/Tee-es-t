@@ -47,7 +47,9 @@ CLIENT_CONFIG = {"installed": {"client_id": "client-id", "client_secret": "clien
 
 @pytest.fixture
 def clean_env(monkeypatch):
-    for name in PATH_VARS + SECRET_VARS + ("CI",):
+    # Keep local-only failure tests independent of workstation proxy settings.
+    proxy_vars = tuple(f"{prefix}proxy" for prefix in ("http_", "https_", "all_", "no_"))
+    for name in PATH_VARS + SECRET_VARS + ("CI",) + proxy_vars + tuple(x.upper() for x in proxy_vars):
         monkeypatch.delenv(name, raising=False)
     return monkeypatch
 
@@ -215,6 +217,29 @@ def test_missing_api_key_becomes_a_failed_result(clean_env):
     )
 
     assert result.startswith("API Error")
+
+
+def test_client_init_failure_returns_error_result(clean_env):
+    # Some SDK versions validate credentials when anthropic.Anthropic() is
+    # constructed. That must become an "API Error (client)" result, not an
+    # uncaught crash, so autonomous.py still writes its report.
+    import anthropic
+
+    import agent_loop
+
+    def boom():
+        raise anthropic.AnthropicError("The api_key client option must be set")
+
+    clean_env.setattr(agent_loop.anthropic, "Anthropic", boom)
+    result = agent_loop.run_agent_loop(
+        user_prompt="hi",
+        system_prompt="sys",
+        tools=[],
+        execute_tool=lambda name, data: "",
+        max_iterations=2,
+    )
+
+    assert result.startswith("API Error (client)")
 
 
 # --- GitHub token -------------------------------------------------------------
