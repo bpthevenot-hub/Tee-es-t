@@ -43,7 +43,7 @@ try:
 except ImportError:          # hors macOS / Linux : pas de sérialisation, le reste marche
     fcntl = None
 
-VERSION = '3.19'
+VERSION = '3.20'
 SEUIL_MIN = 4        # demandes humaines avant d'exiger une synthèse
 SEUIL_REFRESH = 8    # nouvelles demandes depuis la dernière synthèse (ou libération)
 MAX_RELANCES = 3     # blocages consécutifs avant de laisser finir
@@ -441,7 +441,7 @@ def tampon_durable(session: str) -> int:
     return rapport_durable(session)[0]
 
 
-def couvrir_mere(mere: str, herite: int, point: str) -> None:
+def couvrir_mere(mere: str, herite: int, point: str) -> bool:
     """La synthèse d'une fourche couvre sa mère jusqu'au point de fourche : tampon posé chez la mère (lu,
     mesuré et écrit sous son verrou), ancré au point de fourche pour qu'un /rewind de la mère le ramène.
     Transcript de la mère lisible : on mesure ce que ce nouveau tampon y couvre (point quitté par un
@@ -468,7 +468,8 @@ def couvrir_mere(mere: str, herite: int, point: str) -> None:
                 etat_mere['rapports_vus'] = []    # état né ici : son compte rendu n'est pas « déjà vu »
             etat_mere.update({'tampon': nouvelle, 'ancre_tampon': point, 'ancre_souple': souple, 't_tampon': time.time(),
                               'tampon_fourche': True, 'couvert': max(entier(etat_mere.get('couvert')), nouvelle)})
-            ecrire_json(f_mere, etat_mere)
+            return ecrire_json(f_mere, etat_mere)
+        return True
 
 
 def abandonnee(a, ancre: str) -> bool:
@@ -575,9 +576,12 @@ def mode_tamponne(session: str, transcript: str) -> int:
         for mere, herite in parents.items():   # une fourche synthétisée couvre ce qu'elle a hérité de sa mère
             if mere == session:
                 continue                         # (jamais sa propre mère : pas de double verrou)
-            effacer_dette_si(mere, lambda d, h=herite, m=mere: entier(d.get('nb'), 0) <= h
-                             and dette_dans_fourche(d, m, a.fourches.get(m, '')))
-            couvrir_mere(mere, herite, a.fourches.get(mere, ''))
+            # Publier la couverture avant de nettoyer la dette : un Stop concurrent
+            # de la mère doit déjà voir la synthèse de la fourche. Le nettoyage
+            # relit ensuite la dette sous verrou et préserve les nouveaux tours.
+            if couvrir_mere(mere, herite, a.fourches.get(mere, '')):
+                effacer_dette_si(mere, lambda d, h=herite, m=mere: entier(d.get('nb'), 0) <= h
+                                 and dette_dans_fourche(d, m, a.fourches.get(m, '')))
     print(f'Vive mémoire : synthèse enregistrée pour la session {session} ({nb} demandes)'
           + ('' if ok else ' — ATTENTION : état non inscriptible, rien n\'a été écrit') + '.')
     print(f'Inscris aussi, sur trois lignes, « Session : {session} », « Demandes : {nb} » et « Ancre : {a.ancre} » '
@@ -804,9 +808,9 @@ def mode_stop(entree: dict, session: str, etat: dict, f_etat: Path) -> int:
         noter_dette(session, nb, a.ancre, a)         # seule la libération retient : la dette doit rester notée
     for mere, herite in a.parents.items():   # la synthèse propre de cette fourche couvre ce qu'elle a hérité
         if mere != session and propre >= herite:
-            couvrir_mere(mere, herite, a.fourches.get(mere, ''))
-            effacer_dette_si(mere, lambda d, h=herite, m=mere: entier(d.get('nb'), 0) <= h
-                             and dette_dans_fourche(d, m, a.fourches.get(m, '')))
+            if couvrir_mere(mere, herite, a.fourches.get(mere, '')):
+                effacer_dette_si(mere, lambda d, h=herite, m=mere: entier(d.get('nb'), 0) <= h
+                                 and dette_dans_fourche(d, m, a.fourches.get(m, '')))
     # Pause quand la session attend du travail né depuis la dernière demande humaine (tâche en
     # cours ou en file, réveil planifié) : jusqu'à la demande suivante. Une attente plus ancienne
     # (serveur de dev, surveillance sans fin) ne suspend plus rien.
@@ -1169,3 +1173,4 @@ if __name__ == '__main__':
         if tampon:
             print(f'Vive mémoire : erreur pendant le tampon ({type(erreur).__name__}) ; rien n\'a été tamponné, la dette reste.')
     sys.exit(code if tampon else 0)
+
