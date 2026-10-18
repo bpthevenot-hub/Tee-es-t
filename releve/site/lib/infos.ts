@@ -15,6 +15,9 @@ export const TEL_3114_HREF = 'tel:3114'
 /** Ligne d’écoute de l’association MOTS — médecins pairs, 7 j/7, confidentielle. */
 export const TEL_MOTS_AFFICHE = '06 08 28 25 89'
 export const TEL_MOTS_HREF = 'tel:+33608282589'
+/** SAMU : numéro national d’aide médicale urgente (source : service-public.fr, « Numéros d’urgence »). */
+export const TEL_SAMU_AFFICHE = '15'
+export const TEL_SAMU_HREF = 'tel:15'
 export const MOTS_SITE = 'https://www.association-mots.org'
 export const SNB_SITE = 'https://snb.center'
 
@@ -70,7 +73,7 @@ export const PARCOURS = [
 /** Les cinq innovations assumées (brief § 6). */
 export const INNOVATIONS = [
   { titre: 'Le pair avant le psy', texte: 'Un médecin pair formé, hors établissement, en premier contact — le seul format de suivi longitudinal qui existe en France pour les soignants.' },
-  { titre: 'Des événements, pas un numéro', texte: 'Les portes d’entrée sont les moments à risque de l’établissement, pas une ligne anonyme que moins d’un soignant sur deux cents appelle.' },
+  { titre: 'Des événements, pas un numéro', texte: 'Les portes d’entrée sont les moments à risque de l’établissement, pas une ligne anonyme que presque personne n’appelle.' },
   { titre: 'Le mur de verre', texte: 'La direction reçoit des agrégats sous seuil, posés à côté de ses propres indicateurs — et jamais un nom.' },
   { titre: 'Conçu pour la garde, et pour être fermé', texte: 'Sessions de quarante secondes reprenables, aucune modale, mode nuit ambre, mode couloir, aucune notification hors service.' },
   { titre: 'Résultats ouverts', texte: 'Un registre de recours, de rétention et de retours au travail rendu aux établissements et à MOTS chaque année.' },
@@ -79,7 +82,7 @@ export const INNOVATIONS = [
 /** Ce que Relève ne fait pas (brief § 9). */
 export const INTERDITS = [
   'Ne dépiste pas, ne diagnostique pas, ne recommande pas : hors dispositif médical au départ.',
-  'N’affiche aucun score d’office, n’attribue ni badge ni série ni niveau.',
+  'N’affiche aucun score d’office, n’attribue ni récompense, ni série, ni niveau.',
   'N’envoie aucune notification hors service et ne se connecte jamais au système RH.',
   'Ne transmet aucun nom à l’employeur, aucune cellule de moins de dix personnes.',
 ] as const
